@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 object NetworkModule {
     // Emulator: 10.0.2.2 corresponds to host localhost
     // Real Device: Replace with your PC's IP address (e.g., 192.168.1.X)
-    const val BASE_URL = "http://10.35.127.45:8000/"
+    const val BASE_URL = "https://stegapp-server.onrender.com/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

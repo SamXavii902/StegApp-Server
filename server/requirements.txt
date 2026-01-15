@@ -6,3 +6,4 @@ aiofiles
 cloudinary
 pymongo
 dnspython
+python-dotenv

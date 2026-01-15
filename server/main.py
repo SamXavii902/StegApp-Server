@@ -7,17 +7,21 @@ import shutil
 from pathlib import Path
 
 # --- Configuration ---
+# --- Configuration ---
 # UPLOAD_DIR = "uploads" # Deprecated for Cloud
 # Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+
+from dotenv import load_dotenv
+load_dotenv()
 
 import cloudinary
 import cloudinary.uploader
 
 # Cloudinary Config
-cloudinary.config( 
-  cloud_name = "dlguoywzg", 
-  api_key = "849149685792566", 
-  api_secret = "-ZlCaMhbbej8vgUJ-zYeVHWsaEA",
+cloudinary.config(
+  cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
+  api_key = os.getenv("CLOUDINARY_API_KEY"),
+  api_secret = os.getenv("CLOUDINARY_API_SECRET"),
   secure = True
 )
 
@@ -26,7 +30,9 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from pydantic import BaseModel
 
-uri = "mongodb+srv://vamsiuppu4_db_user:pnnjDhFstJJjOwOa@cluster0.d2zinnc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+uri = os.getenv("MONGODB_URI")
+if not uri:
+    raise ValueError("MONGODB_URI environment variable not set")
 
 # Create a new client and connect to the server
 mongo_client = MongoClient(uri, server_api=ServerApi('1'))

@@ -106,9 +106,17 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
-                                            isLoading = false
-                                            val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                                            android.widget.Toast.makeText(context, "Login Failed: $errorBody", android.widget.Toast.LENGTH_LONG).show()
+                                            val errorBody = response.errorBody()?.string() ?: ""
+                                            if (errorBody.contains("Username already exists")) {
+                                                // User exists, log them in!
+                                                UserPrefs.saveUsername(context, username.trim())
+                                                navController.navigate("home") {
+                                                    popUpTo("login") { inclusive = true }
+                                                }
+                                            } else {
+                                                isLoading = false
+                                                android.widget.Toast.makeText(context, "Error: $errorBody", android.widget.Toast.LENGTH_LONG).show()
+                                            }
                                         }
                                     } catch (e: Exception) {
                                         isLoading = false
