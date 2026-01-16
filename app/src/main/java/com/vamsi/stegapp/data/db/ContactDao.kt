@@ -20,4 +20,7 @@ interface ContactDao {
 
     @Query("UPDATE contacts SET lastMessage = :message, lastMessageTime = :time, unreadCount = :unreadCount WHERE name = :chatName")
     suspend fun updateLastMessage(chatName: String, message: String, time: Long, unreadCount: Int = 0)
+
+    @Query("SELECT * FROM contacts WHERE name = :name LIMIT 1")
+    suspend fun getContactById(name: String): ContactEntity?
 }

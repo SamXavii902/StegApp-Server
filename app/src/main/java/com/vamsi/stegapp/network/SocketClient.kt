@@ -5,9 +5,15 @@ import io.socket.client.IO
 import io.socket.client.Socket
 import org.json.JSONObject
 
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+
 object SocketClient {
     private const val TAG = "SocketClient"
     private var socket: Socket? = null
+    
+    private val _incomingMessages = MutableSharedFlow<JSONObject>(extraBufferCapacity = 10)
+    val incomingMessages = _incomingMessages.asSharedFlow()
 
     fun connect(username: String) {
         try {
@@ -37,7 +43,7 @@ object SocketClient {
                 if (args.isNotEmpty()) {
                     val data = args[0] as JSONObject
                     Log.d(TAG, "New Message Received: $data")
-                    // TODO: Notify ViewModel/Repository via Callback or Flow
+                    _incomingMessages.tryEmit(data)
                 }
             }
 
