@@ -2,8 +2,6 @@
 
 **StegApp** is a privacy-focused Android messaging application that hides encrypted messages *inside* images using advanced Steganography techniques. Built with a modern tech stack, it ensures that your conversations look like innocent image exchanges to any third-party observer.
 
-![StegApp Banner](https://via.placeholder.com/1200x500.png?text=StegApp+Secure+Chat)
-*(Replace with actual screenshot or banner)*
 
 ## 🚀 Key Features
 
@@ -33,12 +31,6 @@
 *   **Database**: MongoDB Atlas
 *   **Storage**: Cloudinary (Lossless optimization)
 *   **Hosting**: Render.com
-
-## 📸 Screenshots
-
-| Login Screen | Home (Chats) | Secure Chat | Message Reveal |
-|:---:|:---:|:---:|:---:|
-| ![Login](https://via.placeholder.com/200x400?text=Login) | ![Home](https://via.placeholder.com/200x400?text=Home) | ![Chat](https://via.placeholder.com/200x400?text=Chat) | ![Reveal](https://via.placeholder.com/200x400?text=Reveal) |
 
 ## 🔧 Installation & Setup
 

@@ -178,6 +178,10 @@ async def delete_message(sid, data):
             print(f"Forwarded delete_message to {recipient}")
         else:
             print(f"Recipient {recipient} offline. Deletion not propagated immediately.")
+    else:
+        print(f"Invalid delete request: {data}")
+
+print("✅ Socket.IO event handlers registered: connect, disconnect, send_message, delete_message")
 
 
 @sio.event
