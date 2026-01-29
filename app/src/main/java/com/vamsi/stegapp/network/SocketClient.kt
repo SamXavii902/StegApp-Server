@@ -58,13 +58,13 @@ object SocketClient {
         socket?.off()
     }
 
-    fun emitMessage(text: String?, imageUrl: String?, sender: String, recipient: String) {
+    fun emitMessage(text: String?, imageUrl: String?, sender: String, recipient: String, timestamp: Long = System.currentTimeMillis()) {
         val json = JSONObject().apply {
             put("text", text)
             put("imageUrl", imageUrl)
             put("sender", sender)
             put("recipient", recipient)
-            put("timestamp", System.currentTimeMillis())
+            put("timestamp", timestamp)
         }
         socket?.emit("send_message", json)
     }

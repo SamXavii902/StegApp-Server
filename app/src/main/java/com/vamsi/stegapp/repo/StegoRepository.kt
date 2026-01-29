@@ -45,7 +45,7 @@ class StegoRepository(private val context: Context) {
         }
     }
 
-    private fun saveToMediaStore(file: File) {
+    fun saveToMediaStore(file: File) {
         val values = android.content.ContentValues().apply {
             put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "Stego_${System.currentTimeMillis()}.png")
             put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")

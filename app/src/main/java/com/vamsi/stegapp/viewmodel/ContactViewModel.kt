@@ -46,7 +46,8 @@ class ContactViewModel(private val context: Context) : ViewModel() {
                         text = text,
                         imageUri = imageUrl,
                         isFromMe = false,
-                        isStego = imageUrl != null, // Assuming all images via this socket are stego
+                        isStego = imageUrl != null,
+                        status = 2, // REMOTE / PENDING DOWNLOAD
                         timestamp = timestamp
                     )
                     messageDao.insertMessage(message)

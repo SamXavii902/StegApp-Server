@@ -160,7 +160,8 @@ fun ChatScreen(
             textInput = ""; selectedImageUri = null
         },
         onError = { toastMessage = it },
-        onDeleteMessage = { viewModel.deleteMessage(it) }
+        onDeleteMessage = { viewModel.deleteMessage(it) },
+        onDownloadMessage = { viewModel.downloadMedia(it) }
     )
 }
 
@@ -172,7 +173,7 @@ fun ChatScreenContent(
     selectedImageUri: Uri?, showPasswordSheet: Boolean, onTogglePasswordSheet: () -> Unit,
     onDismissPasswordSheet: () -> Unit, currentMode: ChatMode, onModeChange: (ChatMode) -> Unit,
     onBack: () -> Unit, onPickImage: () -> Unit, onSend: () -> Unit, onError: (String) -> Unit,
-    onDeleteMessage: (Message) -> Unit
+    onDeleteMessage: (Message) -> Unit, onDownloadMessage: (Message) -> Unit
 ) {
     val saiBackground = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F6)
     val saiSurface = if (isDark) Color(0xFF2C2C2E) else Color.White
@@ -239,7 +240,7 @@ fun ChatScreenContent(
                 )
             ) {
                 items(messages.reversed(), key = { it.id }) { message -> 
-                    MessageBubble(message, isDark, onLongClick = { selectedMessage = message }) 
+                    MessageBubble(message, isDark, onLongClick = { selectedMessage = message }, onDownload = onDownloadMessage) 
                 }
             }
         }
@@ -426,7 +427,7 @@ fun ChatScreenContent(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Unit) {
+fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Unit, onDownload: (Message) -> Unit) {
     val isMe = message.isFromMe
     val isRevealed = message.imageUri != null && message.text != null && !isMe
     
@@ -458,7 +459,34 @@ fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Un
                 val showImage = message.imageUri != null && !isRevealed
                 
                 if (showImage) {
-                    AsyncImage(model = message.imageUri, contentDescription = null, modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+                    Box(contentAlignment = Alignment.Center) {
+                        AsyncImage(
+                            model = message.imageUri, 
+                            contentDescription = null, 
+                            modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp))
+                                .let { if (message.status == 1 || message.status == 3) it.graphicsLayer { alpha = 0.5f } else it },
+                            contentScale = ContentScale.Crop
+                        )
+                        
+                        // 1. Sending Buffer
+                        if (message.status == 1) { // SENDING
+                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                        }
+                        
+                         // 2. Download Button (Receiver)
+                        if (!isMe && message.status == 2) { // REMOTE / PENDING
+                            Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.6f)) {
+                                IconButton(onClick = { onDownload(message) }) {
+                                    Icon(Icons.Default.Download, "Download", tint = Color.White)
+                                }
+                            }
+                        }
+
+                        // 3. Downloading Spinner
+                        if (!isMe && message.status == 3) { // DOWNLOADING
+                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        }
+                    }
                     if (message.text != null) Spacer(modifier = Modifier.height(8.dp))
                 }
                 
@@ -479,7 +507,7 @@ fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Un
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lock, null, modifier = Modifier.size(12.dp), tint = contentColor.copy(alpha = 0.6f))
-                        Text(" Hidden", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
+                        Text(if (message.status == 1) " Sending..." else " Hidden", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
                     }
                 }
             }

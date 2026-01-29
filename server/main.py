@@ -44,6 +44,7 @@ except Exception as e:
 
 db = mongo_client["steg_app_db"]
 users_collection = db["users"]
+messages_collection = db["messages"]
 
 # --- Pydantic Models ---
 class UserRegister(BaseModel):
@@ -122,7 +123,6 @@ async def upload_image(file: UploadFile = File(...)):
 @sio.event
 async def connect(sid, environ):
     # Extract username from query params
-    # URL: ws://Url/socket.io/?username=Sam
     query_string = environ.get('QUERY_STRING', '')
     params = dict(qs.split('=') for qs in query_string.split('&') if '=' in qs)
     username = params.get('username')
@@ -130,13 +130,55 @@ async def connect(sid, environ):
     if username:
         print(f"Client connected: {username} ({sid})")
         users_collection.update_one({"username": username}, {"$set": {"socket_id": sid}})
+        
+        # SYNC: Deliver offline messages
+        offline_msgs = messages_collection.find({"recipient": username, "delivered": False})
+        for msg in offline_msgs:
+            data = {
+                "id": msg.get("id"),
+                "text": msg.get("text"),
+                "imageUrl": msg.get("imageUrl"),
+                "sender": msg.get("sender"),
+                "recipient": msg.get("recipient"),
+                "timestamp": msg.get("timestamp")
+            }
+            await sio.emit('new_message', data, room=sid)
+            # Mark as delivered
+            messages_collection.update_one({"_id": msg["_id"]}, {"$set": {"delivered": True}})
+            print(f"Synced offline message from {data['sender']} to {username}")
+
     else:
         print(f"Client connected (Anonymous): {sid}")
 
 @sio.event
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
-    # Optional: Clear socket_id in DB, but keeping it might be useful for offline logic later
+    # Optional: Clear socket_id in DB
+    users_collection.update_one({"socket_id": sid}, {"$set": {"socket_id": None}})
+
+@sio.event
+async def delete_message(sid, data):
+    """
+    Handle message deletion request.
+    Data: { 'messageId': ..., 'recipient': ... }
+    """
+    print(f"Delete request received: {data}")
+    recipient = data.get('recipient')
+    message_id = data.get('messageId')
+
+    if recipient and message_id:
+        # 1. ALWAYS Delete from DB (if you want server-side deletion too)
+        # messages_collection.delete_one({"_id": ...}) # ID format mismatch likely, skipping for now or use filter
+        
+        # 2. Forward to Recipient
+        user = users_collection.find_one({"username": recipient})
+        if user and user.get("socket_id"):
+            target_sid = user["socket_id"]
+            await sio.emit('delete_message', data, room=target_sid)
+            print(f"Forwarded delete_message to {recipient}")
+        else:
+            print(f"Recipient {recipient} offline. Deletion not propagated immediately.")
+
 
 @sio.event
 async def send_message(sid, data):
@@ -147,17 +189,32 @@ async def send_message(sid, data):
     print(f"Message received: {data}")
     recipient = data.get('recipient')
     
+    # ALWAYS Save to DB first (Persistence)
+    msg_doc = {
+        "id": data.get("id"),
+        "text": data.get("text"),
+        "imageUrl": data.get("imageUrl"),
+        "sender": data.get("sender"),
+        "recipient": recipient,
+        "timestamp": data.get("timestamp"), # Client should send TS or Server adds it
+        "delivered": False
+    }
+    result = messages_collection.insert_one(msg_doc)
+    
     if recipient:
         # Find recipient's socket_id
         user = users_collection.find_one({"username": recipient})
         if user and user.get("socket_id"):
             target_sid = user["socket_id"]
+            # Try to emit
             await sio.emit('new_message', data, room=target_sid)
             print(f"Sent to {recipient} at {target_sid}")
+            # Mark as delivered
+            messages_collection.update_one({"_id": result.inserted_id}, {"$set": {"delivered": True}})
         else:
-            print(f"Recipient {recipient} not found or offline")
+            print(f"Recipient {recipient} offline. Message queued.")
     else:
-        # Fallback to broadcast (Old behavior)
+        # Fallback to broadcast (Old behavior - rarely used now)
         await sio.emit('new_message', data)
 
 

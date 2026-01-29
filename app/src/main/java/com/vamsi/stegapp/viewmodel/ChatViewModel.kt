@@ -53,41 +53,37 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
 
     fun sendMessage(text: String, imageUri: Uri, secretKey: String) {
         viewModelScope.launch {
-            _isLoading.value = true
             _error.value = null
             
             // 1. Convert Uri to File path
             val imagePath = copyUriToTempFile(imageUri)
             if (imagePath == null) {
                 _error.value = "Failed to process image"
-                _isLoading.value = false
                 return@launch
             }
             // 2. Embed message
             val result = repository.embedMessage(imagePath, text, secretKey)
             
             result.onSuccess { stegoPath ->
-                // Add to messages
-                // Save to DB
+                // Add to messages (Status = 1: SENDING)
                 val newMessage = Message(
                     id = java.util.UUID.randomUUID().toString(),
                     chatId = chatId,
-                    text = null, // Hidden!
+                    text = null,
                     imageUri = Uri.fromFile(File(stegoPath)),
                     isFromMe = true,
                     isStego = true,
+                    status = 1, // SENDING
                     timestamp = System.currentTimeMillis()
                 )
                 dao.insertMessage(newMessage.toEntity())
                 contactDao.updateLastMessage(chatId, "Sent a hidden message", newMessage.timestamp, 0)
                 
-                // Upload to Server for "Lossless" transfer
-                uploadStegoImage(stegoPath)
+                // Upload
+                uploadStegoImage(stegoPath, newMessage)
             }.onFailure {
                 _error.value = "Embedding failed: ${it.message}"
             }
-            
-            _isLoading.value = false
         }
     }
 
@@ -113,30 +109,65 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                     imageUri = imageUri,
                     isFromMe = false,
                     isStego = true,
+                    status = 4, // DOWNLOADED/REVEALED
                     timestamp = System.currentTimeMillis()
                 )
                  dao.insertMessage(newMessage.toEntity())
-                 contactDao.updateLastMessage(chatId, secretText, newMessage.timestamp, 0) // Reset unread or increment? For now 0 as we are IN chat.
+                 contactDao.updateLastMessage(chatId, secretText, newMessage.timestamp, 0) 
             }.onFailure {
                  _error.value = "Extraction failed: ${it.message}"
-                 // Still show the image but maybe mark as failed extraction?
-                 val newMessage = Message(
-                    id = java.util.UUID.randomUUID().toString(),
-                    chatId = chatId,
-                    text = "[No secret found or Wrong Key]",
-                    imageUri = imageUri,
-                    isFromMe = false,
-                    isStego = false,
-                    timestamp = System.currentTimeMillis()
-                )
-                dao.insertMessage(newMessage.toEntity())
-                contactDao.updateLastMessage(chatId, "Received an image", newMessage.timestamp, 0)
             }
             _isLoading.value = false
         }
     }
 
-    private fun uploadStegoImage(path: String) {
+    fun downloadMedia(message: Message) {
+        viewModelScope.launch {
+            try {
+                // Update status to DOWNLOADING (3)
+                val downloadingMsg = message.toEntity().copy(status = 3)
+                dao.insertMessage(downloadingMsg) // Updates existing
+
+                val url = message.imageUri.toString()
+                val request = okhttp3.Request.Builder().url(url).build()
+                val response = with(kotlinx.coroutines.Dispatchers.IO) {
+                     okhttp3.OkHttpClient().newCall(request).execute()
+                }
+                
+                if (!response.isSuccessful) throw Exception("Download Failed: ${response.code}")
+
+                val bytes = response.body?.bytes() ?: throw Exception("Empty body")
+                
+                // Save to Gallery
+                val filename = "Stego_${System.currentTimeMillis()}.png"
+                
+                // Save to Internal Storage First (Safe for File access)
+                val file = File(appContext.getExternalFilesDir("stego_received"), filename)
+                if (file.parentFile?.exists() == false) file.parentFile?.mkdirs()
+                
+                val fos = FileOutputStream(file)
+                fos.write(bytes)
+                fos.close()
+
+                // Save copy to Gallery for User
+                repository.saveToMediaStore(file)
+
+                // Update DB with local path
+                val downloadedMsg = downloadingMsg.copy(
+                    imageUri = file.absolutePath, // Uri.fromFile(file).toString()
+                    status = 4 // DOWNLOADED
+                )
+                dao.insertMessage(downloadedMsg)
+                
+            } catch (e: Exception) {
+                _error.value = "Download Error: ${e.message}"
+                // Revert status
+                 dao.insertMessage(message.toEntity().copy(status = 2)) // Back to Pending
+            }
+        }
+    }
+
+    private fun uploadStegoImage(path: String, message: Message) {
         viewModelScope.launch {
             try {
                 val file = File(path)
@@ -147,16 +178,21 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                 if (response.isSuccessful && response.body() != null) {
                     val url = response.body()!!.url
                     val username = UserPrefs.getUsername(appContext) ?: "Anonymous"
-                    // Notify Recipient via Socket
+                    
+                    // Update Status to SENT (0)
+                    dao.insertMessage(message.toEntity().copy(status = 0))
+
                     SocketClient.emitMessage(
                         text = null, 
                         imageUrl = url, 
                         sender = username,
-                        recipient = chatId // chatId is the contact name
+                        recipient = chatId,
+                        timestamp = message.timestamp
                     )
-                    _success.value = "Sent & Uploaded Securely!"
+                    // _success.value = "Sent!" // Toast removed as requested
                 } else {
                     _error.value = "Upload failed: ${response.code()}"
+                    // Maybe mark as failed in DB?
                 }
             } catch (e: Exception) {
                 _error.value = "Network Error: ${e.message}"
@@ -216,6 +252,7 @@ private fun MessageEntity.toDomain(): Message {
         imageUri = imageUri?.let { Uri.parse(it) },
         isFromMe = isFromMe,
         isStego = isStego,
+        status = status,
         timestamp = timestamp
     )
 }
@@ -228,6 +265,7 @@ private fun Message.toEntity(): MessageEntity {
         imageUri = imageUri?.toString(),
         isFromMe = isFromMe,
         isStego = isStego,
+        status = status,
         timestamp = timestamp
     )
 }

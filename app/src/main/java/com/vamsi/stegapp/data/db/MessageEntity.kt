@@ -11,5 +11,6 @@ data class MessageEntity(
     val imageUri: String?, // Stored as String, convert to Uri when reading
     val isFromMe: Boolean,
     val isStego: Boolean,
+    val status: Int = 0,
     val timestamp: Long
 )
