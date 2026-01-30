@@ -64,11 +64,7 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
     
     // Contact's online status
     val contactOnlineStatus = contactDao.getContactFlow(chatId)
-        .map { contact -> 
-            val isOnline = contact?.isOnline ?: false
-            android.util.Log.d("ChatViewModel", "Status update for $chatId: $isOnline")
-            isOnline 
-        }
+        .map { contact -> contact?.isOnline ?: false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
 
