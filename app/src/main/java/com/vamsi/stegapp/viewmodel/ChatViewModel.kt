@@ -19,6 +19,7 @@ import com.vamsi.stegapp.data.db.AppDatabase
 import com.vamsi.stegapp.data.db.MessageEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import com.vamsi.stegapp.network.SocketClient
 import com.vamsi.stegapp.data.db.ContactDao
@@ -60,6 +61,16 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
     val success = _success.asStateFlow()
 
     val isConnected = SocketClient.isConnected
+    
+    // Contact's online status
+    val contactOnlineStatus = contactDao.getContactFlow(chatId)
+        .map { contact -> 
+            val isOnline = contact?.isOnline ?: false
+            android.util.Log.d("ChatViewModel", "Status update for $chatId: $isOnline")
+            isOnline 
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
 
     fun sendMessage(text: String, imageUri: Uri?, secretKey: String, camouflageText: String? = null) {
         viewModelScope.launch {

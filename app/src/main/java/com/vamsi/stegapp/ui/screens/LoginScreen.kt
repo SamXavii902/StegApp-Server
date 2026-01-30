@@ -25,6 +25,30 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
     val context = LocalContext.current
     val view = LocalView.current
     var username by remember { mutableStateOf("") }
+    
+    // Permission Launcher
+    val permissionsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        UserPrefs.setPermissionsRequested(context, true)
+        val allGranted = permissions.values.all { it }
+        if (!allGranted) {
+            android.widget.Toast.makeText(context, "Some permissions were denied. App features may be limited.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    fun requestPermissions() {
+        if (!UserPrefs.arePermissionsRequested(context)) {
+            val permissionsToRequest = buildList {
+                add(android.Manifest.permission.CAMERA)
+                add(android.Manifest.permission.READ_MEDIA_IMAGES)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    add(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            permissionsLauncher.launch(permissionsToRequest.toTypedArray())
+        }
+    }
 
     if (!view.isInEditMode) {
         SideEffect {
@@ -37,6 +61,7 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
     val backgroundColor = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F6)
     val cardColor = if (isDark) Color(0xFF1C1C1E) else Color.White
     val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+
 
     Box(
         modifier = Modifier
@@ -109,6 +134,7 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                             } else {
                                                 context.startService(serviceIntent)
                                             }
+                                            requestPermissions()
                                             navController.navigate("home") {
                                                 popUpTo("login") { inclusive = true }
                                             }
@@ -124,6 +150,7 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                                 } else {
                                                     context.startService(serviceIntent)
                                                 }
+                                                requestPermissions()
                                                 navController.navigate("home") {
                                                     popUpTo("login") { inclusive = true }
                                                 }

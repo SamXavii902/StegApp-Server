@@ -127,30 +127,6 @@ fun AppNavigation() {
     val context = LocalContext.current
     val startDest = if (UserPrefs.isLoggedIn(context)) "home" else "login"
     
-    // First-Launch Permission Request
-    val permissionsLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        UserPrefs.setPermissionsRequested(context, true)
-        val allGranted = permissions.values.all { it }
-        if (!allGranted) {
-            Toast.makeText(context, "Some permissions were denied. App features may be limited.", Toast.LENGTH_LONG).show()
-        }
-    }
-    
-    LaunchedEffect(Unit) {
-        if (!UserPrefs.arePermissionsRequested(context) && UserPrefs.isLoggedIn(context)) {
-            val permissionsToRequest = buildList {
-                add(android.Manifest.permission.CAMERA)
-                add(android.Manifest.permission.READ_MEDIA_IMAGES)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    add(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
-            permissionsLauncher.launch(permissionsToRequest.toTypedArray())
-        }
-    }
-    
     NavHost(navController = navController, startDestination = startDest) {
         composable("login") { LoginScreen(navController, isSystemInDarkTheme()) }
         composable("home") { HomeScreen(navController, isSystemInDarkTheme()) }
@@ -183,6 +159,7 @@ fun ChatScreen(
     val isDark = isSystemInDarkTheme()
     val messages by viewModel.messages.collectAsState(initial = emptyList())
     val isConnected by viewModel.isConnected.collectAsState(initial = false)
+    val isContactOnline by viewModel.contactOnlineStatus.collectAsState(initial = false)
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var textInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("strongPassword123") }
@@ -317,7 +294,7 @@ fun ChatScreen(
         isStealthMode = isStealthMode,
         onStealthModeChange = { isStealthMode = it },
         isConnected = isConnected,
-
+        isContactOnline = isContactOnline
     )
 }
 
@@ -331,7 +308,8 @@ fun ChatScreenContent(
 
     onBack: () -> Unit, onPickImage: () -> Unit, onSend: () -> Unit, onError: (String) -> Unit,
     onDeleteMessage: (Message, Boolean) -> Unit, onDownloadMessage: (Message) -> Unit, onRemoveImage: () -> Unit,
-    isStealthMode: Boolean, onStealthModeChange: (Boolean) -> Unit, onCameraClick: () -> Unit, isConnected: Boolean
+    isStealthMode: Boolean, onStealthModeChange: (Boolean) -> Unit, onCameraClick: () -> Unit, isConnected: Boolean,
+    isContactOnline: Boolean
 ) {
     val saiBackground = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F6)
     val saiSurface = if (isDark) Color(0xFF2C2C2E) else Color.White
@@ -382,9 +360,9 @@ fun ChatScreenContent(
                     Column {
                         Text(text = chatName, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp), color = saiTextPrimary)
                         Text(
-                            text = if (isConnected) "Online" else "Offline",
+                            text = if (isContactOnline) "Online" else "Offline",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                            color = if (isContactOnline) Color(0xFF4CAF50) else Color(0xFFFF5252)
                         )
                     }
                 }

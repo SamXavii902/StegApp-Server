@@ -35,4 +35,7 @@ interface ContactDao {
     
     @Query("UPDATE contacts SET isOnline = :isOnline WHERE name = :contactId")
     suspend fun updateContactStatus(contactId: String, isOnline: Boolean)
+
+    @Query("SELECT * FROM contacts WHERE id = :id")
+    fun getContactFlow(id: String): kotlinx.coroutines.flow.Flow<ContactEntity?>
 }

@@ -1,6 +1,7 @@
 package com.vamsi.stegapp.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -446,30 +447,45 @@ fun ChatListItem(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Profile Pic
-        Surface(
-            shape = CircleShape,
-            color = surfaceColor, // Placeholder color
-            modifier = Modifier.size(56.dp),
-            shadowElevation = 1.dp
-        ) {
-             if (contact.profileImageUri != null) {
-                AsyncImage(
-                    model = contact.profileImageUri,
-                    contentDescription = contact.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-             } else {
-                 Box(contentAlignment = Alignment.Center) {
-                     Text(
-                         text = contact.name.take(1),
-                         style = MaterialTheme.typography.titleLarge,
-                         fontWeight = FontWeight.Bold,
-                         color = textColor
-                     )
+        // Profile Pic with online indicator
+        Box {
+            Surface(
+                shape = CircleShape,
+                color = surfaceColor, // Placeholder color
+                modifier = Modifier.size(56.dp),
+                shadowElevation = 1.dp
+            ) {
+                 if (contact.profileImageUri != null) {
+                    AsyncImage(
+                        model = contact.profileImageUri,
+                        contentDescription = contact.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                 } else {
+                     Box(contentAlignment = Alignment.Center) {
+                         Text(
+                             text = contact.name.take(1),
+                             style = MaterialTheme.typography.titleLarge,
+                             fontWeight = FontWeight.Bold,
+                             color = textColor
+                         )
+                     }
                  }
-             }
+            }
+            
+            // Online indicator dot
+            if (contact.isOnline) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF4CAF50),
+                    modifier = Modifier
+                        .size(14.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .border(2.dp, surfaceColor, CircleShape)
+                ) {}
+            }
         }
 
         Spacer(modifier = Modifier.width(16.dp))
@@ -481,21 +497,11 @@ fun ChatListItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = highlightText(contact.name, searchQuery),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = textColor
-                    )
-                    if (contact.isOnline) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF4CAF50),
-                            modifier = Modifier.size(8.dp)
-                        ) {}
-                    }
-                }
+                Text(
+                    text = highlightText(contact.name, searchQuery),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = textColor
+                )
                 Text(
                     text = formatTime(contact.lastMessageTime),
                     style = MaterialTheme.typography.bodySmall,
