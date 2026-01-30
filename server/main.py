@@ -104,13 +104,12 @@ async def upload_image(file: UploadFile = File(...)):
     Returns the secure URL.
     """
     try:
-        # Upload to Cloudinary (Enforce PNG and Lossless)
+        # Upload to Cloudinary (Enforce PNG and Lossless via quality)
         result = cloudinary.uploader.upload(
             file.file, 
             resource_type="image",
             format="png",
-            quality="100",
-            flags="lossless" 
+            quality="100"
         )
         # Get the URL
         url = result.get("secure_url")
