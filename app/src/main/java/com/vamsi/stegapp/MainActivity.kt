@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -55,6 +56,8 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import coil.compose.AsyncImage
 import com.vamsi.stegapp.model.Message
 import com.vamsi.stegapp.ui.components.*
@@ -64,12 +67,27 @@ import com.vamsi.stegapp.utils.UserPrefs
 import com.vamsi.stegapp.ui.theme.StegAppTheme
 import com.vamsi.stegapp.viewmodel.ChatViewModel
 import com.vamsi.stegapp.viewmodel.ChatViewModelFactory
+import android.content.Intent
+import com.vamsi.stegapp.service.SocketService
+import androidx.core.content.FileProvider
+import java.io.File
 
 enum class ChatMode { HIDE, EXTRACT }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Start Background Service only if logged in
+        if (UserPrefs.isLoggedIn(this)) {
+            val serviceIntent = Intent(this, SocketService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        }
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             StegAppTheme {
@@ -81,6 +99,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        SocketService.isForground = true
+        
+        // Emit Online Status
+        UserPrefs.getUsername(this)?.let { username ->
+            com.vamsi.stegapp.network.SocketClient.emitUserStatus(username, "online")
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SocketService.isForground = false
+        
+        // Emit Offline Status
+        UserPrefs.getUsername(this)?.let { username ->
+            com.vamsi.stegapp.network.SocketClient.emitUserStatus(username, "offline")
+        }
+    }
 }
 
 @Composable
@@ -89,16 +127,45 @@ fun AppNavigation() {
     val context = LocalContext.current
     val startDest = if (UserPrefs.isLoggedIn(context)) "home" else "login"
     
+    // First-Launch Permission Request
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        UserPrefs.setPermissionsRequested(context, true)
+        val allGranted = permissions.values.all { it }
+        if (!allGranted) {
+            Toast.makeText(context, "Some permissions were denied. App features may be limited.", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    LaunchedEffect(Unit) {
+        if (!UserPrefs.arePermissionsRequested(context) && UserPrefs.isLoggedIn(context)) {
+            val permissionsToRequest = buildList {
+                add(android.Manifest.permission.CAMERA)
+                add(android.Manifest.permission.READ_MEDIA_IMAGES)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    add(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            permissionsLauncher.launch(permissionsToRequest.toTypedArray())
+        }
+    }
+    
     NavHost(navController = navController, startDestination = startDest) {
         composable("login") { LoginScreen(navController, isSystemInDarkTheme()) }
         composable("home") { HomeScreen(navController, isSystemInDarkTheme()) }
         composable(
-            "chat/{chatName}",
+            route = "chat/{chatName}?imageUri={imageUri}",
+            arguments = listOf(
+                navArgument("chatName") { type = NavType.StringType },
+                navArgument("imageUri") { type = NavType.StringType; nullable = true }
+            ),
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(300)) },
             exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(300)) }
         ) { backStackEntry ->
             val chatName = backStackEntry.arguments?.getString("chatName") ?: "Chat"
-            ChatScreen(navController = navController, chatName = chatName)
+            val imageUri = backStackEntry.arguments?.getString("imageUri")
+            ChatScreen(navController = navController, chatName = chatName, initialImageUri = imageUri)
         }
     }
 }
@@ -108,18 +175,33 @@ fun AppNavigation() {
 fun ChatScreen(
     navController: NavController,
     chatName: String,
+    initialImageUri: String? = null,
     viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current, chatName))
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val isDark = isSystemInDarkTheme()
     val messages by viewModel.messages.collectAsState(initial = emptyList())
+    val isConnected by viewModel.isConnected.collectAsState(initial = false)
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var textInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("strongPassword123") }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    // Initialize with passed image if available
+    var selectedImageUri by remember { mutableStateOf<Uri?>(initialImageUri?.let { Uri.parse(it) }) }
     var showPasswordSheet by remember { mutableStateOf(false) }
     var currentMode by remember { mutableStateOf(ChatMode.HIDE) }
+    
+    // Stealth & Camouflage State
+    var isStealthMode by remember { mutableStateOf(false) }
+    var showCamouflageDialog by remember { mutableStateOf(false) }
+    var camouflageInput by remember { mutableStateOf("") }
+    // We already have textInput and selectedImageUri hoisted, so no need for pending vars if we don't clear them immediately.
+    // Actually, onSend clears them. So we need to NOT clear them if stealth mode triggers dialog.
+    // Or just Capture them in the Dialog logic context.
+    // But `AlertDialog` is separate.
+    // Since `textInput` and `selectedImageUri` are state, they persist until we change them.
+    // So if we just set `showCamouflageDialog = true` inside `onSend` and DON'T clear, the state remains.
+    // Then in Dialog Confirm, we send and THEN clear. Perfect.
 
     SideEffect {
         val window = (view.context as Activity).window
@@ -139,12 +221,60 @@ fun ChatScreen(
         }
     }
 
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    
     val pickImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedImageUri = uri
         if (uri != null) {
             if (currentMode == ChatMode.EXTRACT) viewModel.receiveMessage(uri, passwordInput)
             else showPasswordSheet = true
         }
+    }
+    
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && tempCameraUri != null) {
+            selectedImageUri = tempCameraUri
+             if (currentMode == ChatMode.EXTRACT) viewModel.receiveMessage(tempCameraUri!!, passwordInput)
+            else showPasswordSheet = true
+        }
+    }
+
+    // Camouflage Dialog
+    if (showCamouflageDialog) {
+        AlertDialog(
+            onDismissRequest = { showCamouflageDialog = false },
+            title = { Text("Camouflage Notification") },
+            text = {
+                Column {
+                    Text("Enter the text to show in the notification:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = camouflageInput,
+                        onValueChange = { camouflageInput = it },
+                        label = { Text("Notification Text") },
+                        placeholder = { Text("e.g. Check out this car") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showCamouflageDialog = false
+                    if (selectedImageUri != null || textInput.isNotBlank()) {
+                         // selectedImageUri is nullable in viewModel.sendMessage, so this is safe now
+                        viewModel.sendMessage(textInput, selectedImageUri, passwordInput, camouflageInput)
+                        // Clear Everything
+                        textInput = ""
+                        selectedImageUri = null
+                        camouflageInput = ""
+                    }
+                }) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCamouflageDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     ChatScreenContent(
@@ -155,13 +285,39 @@ fun ChatScreen(
         onDismissPasswordSheet = { showPasswordSheet = false }, currentMode = currentMode,
         onModeChange = { currentMode = it }, onBack = { navController.popBackStack() },
         onPickImage = { pickImageLauncher.launch("image/*") },
+        onCameraClick = {
+            try {
+                val file = java.io.File(context.getExternalFilesDir(null), "cam_${System.currentTimeMillis()}.jpg")
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                tempCameraUri = uri
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                toastMessage = "Camera Error: ${e.message}"
+            }
+        },
         onSend = {
-            viewModel.sendMessage(textInput, selectedImageUri!!, passwordInput)
-            textInput = ""; selectedImageUri = null
+            if (isStealthMode) {
+                 // Text-only OR Image Steganography
+                 if (selectedImageUri != null || textInput.isNotBlank()) {
+                    showCamouflageDialog = true
+                 } else {
+                     toastMessage = "Enter text or select an image!"
+                 }
+            } else {
+                if (selectedImageUri != null || textInput.isNotBlank()) {
+                    viewModel.sendMessage(textInput, selectedImageUri, passwordInput)
+                    textInput = ""; selectedImageUri = null
+                }
+            }
         },
         onError = { toastMessage = it },
-        onDeleteMessage = { viewModel.deleteMessage(it) },
-        onDownloadMessage = { viewModel.downloadMedia(it) }
+        onDeleteMessage = { msg, forAll -> viewModel.deleteMessage(msg, forAll) },
+        onDownloadMessage = { viewModel.downloadMedia(it) },
+        onRemoveImage = { selectedImageUri = null },
+        isStealthMode = isStealthMode,
+        onStealthModeChange = { isStealthMode = it },
+        isConnected = isConnected,
+
     )
 }
 
@@ -172,8 +328,10 @@ fun ChatScreenContent(
     onTextInputChange: (String) -> Unit, passwordInput: String, onPasswordChange: (String) -> Unit,
     selectedImageUri: Uri?, showPasswordSheet: Boolean, onTogglePasswordSheet: () -> Unit,
     onDismissPasswordSheet: () -> Unit, currentMode: ChatMode, onModeChange: (ChatMode) -> Unit,
+
     onBack: () -> Unit, onPickImage: () -> Unit, onSend: () -> Unit, onError: (String) -> Unit,
-    onDeleteMessage: (Message) -> Unit, onDownloadMessage: (Message) -> Unit
+    onDeleteMessage: (Message, Boolean) -> Unit, onDownloadMessage: (Message) -> Unit, onRemoveImage: () -> Unit,
+    isStealthMode: Boolean, onStealthModeChange: (Boolean) -> Unit, onCameraClick: () -> Unit, isConnected: Boolean
 ) {
     val saiBackground = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F6)
     val saiSurface = if (isDark) Color(0xFF2C2C2E) else Color.White
@@ -183,6 +341,7 @@ fun ChatScreenContent(
     val saiIconTint = if (isDark) Color.White else Color(0xFF1C1C1E)
     val globalShadowColor = if (isDark) Color.Black.copy(alpha = 0.7f) else Color.Gray.copy(alpha = 0.3f)
     var selectedMessage by remember { mutableStateOf<Message?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
     // Back Handler usage commented out for debugging
@@ -219,7 +378,29 @@ fun ChatScreenContent(
                         Box(contentAlignment = Alignment.Center) { Text(chatName.take(1), color = Color.White, fontWeight = FontWeight.Bold) }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = chatName, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 24.sp), color = saiTextPrimary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(text = chatName, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp), color = saiTextPrimary)
+                        Text(
+                            text = if (isConnected) "Online" else "Offline",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                        )
+                    }
+                }
+
+                // Actions (Stealth Switch)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+                    Text("Stealth", style = MaterialTheme.typography.labelSmall, color = saiTextPrimary)
+                    Switch(
+                        checked = isStealthMode,
+                        onCheckedChange = { onStealthModeChange(it) },
+                        modifier = Modifier.scale(0.7f),
+                         colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
                 }
             }
 
@@ -260,30 +441,60 @@ fun ChatScreenContent(
                 // ... (Input Row)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth().padding(4.dp).graphicsLayer(clip = false)
                 ) {
                     Surface(
-                        color = saiSurface, shape = RoundedCornerShape(32.dp), shadowElevation = 0.dp, tonalElevation = 0.dp,
-                        modifier = Modifier.weight(1f).height(56.dp) 
+                        color = saiSurface, shape = RoundedCornerShape(28.dp), shadowElevation = 0.dp, tonalElevation = 0.dp,
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight() 
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically, 
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp) 
+                        ) {
+                            
                             if (selectedImageUri != null) {
-                                AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(modifier = Modifier.padding(end = 8.dp)) {
+                                    AsyncImage(
+                                        model = selectedImageUri, 
+                                        contentDescription = null, 
+                                        modifier = Modifier.size(42.dp).clip(CircleShape), 
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    // Remove Button
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.inverseSurface,
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 2.dp, y = (-2).dp)
+                                            .shadow(2.dp, CircleShape)
+                                            .clickable { onRemoveImage() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove",
+                                            tint = MaterialTheme.colorScheme.inverseOnSurface,
+                                            modifier = Modifier.padding(3.dp)
+                                        )
+                                    }
+                                }
                             }
+
                             androidx.compose.foundation.text.BasicTextField(
                                 value = textInput, onValueChange = onTextInputChange,
                                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = saiTextPrimary),
                                 cursorBrush = androidx.compose.ui.graphics.SolidColor(saiTextPrimary),
-                                singleLine = true, 
-                                decorationBox = { inner -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { if (textInput.isEmpty()) Text("Message $chatName...", color = Color.Gray); inner() } },
-                                modifier = Modifier.weight(1f)
+                                singleLine = false,
+                                maxLines = 5,
+                                decorationBox = { inner -> Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { if (textInput.isEmpty()) Text("Message $chatName...", color = Color.Gray); inner() } },
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(48.dp)) {
-                                IconButton(onClick = { onError("Voice recording coming soon!") }, modifier = Modifier.fillMaxSize()) {
-                                    Icon(Icons.Default.Mic, "Voice", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
+
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
+                                IconButton(onClick = onCameraClick, modifier = Modifier.fillMaxSize()) {
+                                    Icon(Icons.Default.PhotoCamera, "Camera", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
                                 }
                             }
                         }
@@ -293,7 +504,10 @@ fun ChatScreenContent(
                         shape = CircleShape, color = sendBtnColor, shadowElevation = 0.dp, tonalElevation = 0.dp,
                         modifier = Modifier.size(56.dp).shadow(16.dp, CircleShape, clip = false, ambientColor = sendBtnColor, spotColor = sendBtnColor)
                     ) {
-                        IconButton(onClick = { if (selectedImageUri != null) onSend() else onError("Select image first!") }) {
+                        IconButton(
+                            onClick = { onSend() },
+                            enabled = textInput.isNotBlank() || selectedImageUri != null
+                        ) {
                             Icon(Icons.Default.Send, "Send", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).rotate(-45f).offset(x = 2.dp))
                         }
                     }
@@ -377,43 +591,78 @@ fun ChatScreenContent(
                     ) { selectedMessage = null },
                 contentAlignment = Alignment.Center
             ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = saiSurface,
-                    shadowElevation = 8.dp,
-                    tonalElevation = 8.dp,
-                    modifier = Modifier.border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
-                        .clickable(enabled = false) {} // Consume clicks inside the card
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Message Options", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = saiTextPrimary)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Delete Button
-                            Button(
-                                onClick = { 
-                                    selectedMessage?.let { onDeleteMessage(it) }
-                                    selectedMessage = null 
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Delete")
+                // Delete Dialog
+                if (showDeleteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteDialog = false },
+                        title = { Text("Delete Message?") },
+                        text = { Text(if (selectedMessage!!.isFromMe) "You can delete this message for everyone or just for yourself." else "Delete this message from your chat history?") },
+                        confirmButton = {
+                            if (selectedMessage!!.isFromMe) {
+                                Button(onClick = { 
+                                    selectedMessage?.let { onDeleteMessage(it, true) }
+                                    selectedMessage = null; showDeleteDialog = false 
+                                }) { Text("For Everyone") }
+                            } else {
+                                Button(onClick = { 
+                                    selectedMessage?.let { onDeleteMessage(it, false) }
+                                    selectedMessage = null; showDeleteDialog = false 
+                                }) { Text("Delete") }
                             }
+                        },
+                        dismissButton = {
+                            Row {
+                                if (selectedMessage!!.isFromMe) {
+                                    TextButton(onClick = { 
+                                        selectedMessage?.let { onDeleteMessage(it, false) }
+                                        selectedMessage = null; showDeleteDialog = false 
+                                    }) { Text("For Me") }
+                                }
+                                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                            }
+                        }
+                    )
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(28.dp), // Matching Material 3 Dialog shape
+                        color = MaterialTheme.colorScheme.surface, // Fallback for older M3 versions
+                        shadowElevation = 6.dp,
+                        tonalElevation = 6.dp,
+                        modifier = Modifier
+                            .width(280.dp) // Standard Dialog width
+                            .clickable(enabled = false) {}
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp) // Standard Dialog padding
+                        ) {
+                            // Header matching Delete Dialog
+                            Text("Message Options", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Choose an action for this message.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(24.dp))
                             
-                            // Cancel Button
-                            OutlinedButton(
-                                onClick = { selectedMessage = null },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = saiTextPrimary)
+                            // Buttons Row aligned to End
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Cancel")
+                                // Cancel TextButton
+                                TextButton(
+                                    onClick = { selectedMessage = null }
+                                ) {
+                                    Text("Cancel")
+                                }
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Delete Button (Primary)
+                                TextButton(
+                                    onClick = { showDeleteDialog = true },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Delete")
+                                }
                             }
                         }
                     }
@@ -453,10 +702,18 @@ fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Un
                     )
                 }
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
-                // Logic: Show Image ONLY if NOT revealed (and text is null or it's from me)
-                // If revealed, we hide the image.
-                val showImage = message.imageUri != null && !isRevealed
+            // Check if we have ANYTHING to show. If hidden image + null text + not revealed + not stego info... empty?
+            // "showImage" logic below handles image hiding.
+            // If showImage is false, and text is null, and NOT revealed... we might render empty padding.
+             
+            // Calculate if content exists
+             val showImage = message.imageUri != null && !(message.isStego && message.status == 4 && message.text != null)
+             val showText = message.text != null
+             val showRevealed = isRevealed
+             val showStegoInfo = message.isStego && message.isFromMe
+             
+             // Content Render
+             Column(modifier = Modifier.padding(10.dp)) {
                 
                 if (showImage) {
                     Box(contentAlignment = Alignment.Center) {
@@ -487,14 +744,14 @@ fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Un
                              CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                         }
                     }
-                    if (message.text != null) Spacer(modifier = Modifier.height(8.dp))
+                    if (showText) Spacer(modifier = Modifier.height(8.dp))
                 }
                 
-                if (message.text != null) {
-                    Text(text = message.text, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp))
+                if (showText) {
+                    Text(text = message.text!!, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp))
                 }
                 
-                if (isRevealed) {
+                if (showRevealed) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Using LockOpen if available, else Lock with color
@@ -503,13 +760,15 @@ fun MessageBubble(message: Message, isDark: Boolean, onLongClick: (Offset) -> Un
                     }
                 }
 
-                if (message.isStego && message.isFromMe) {
+                if (showStegoInfo) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lock, null, modifier = Modifier.size(12.dp), tint = contentColor.copy(alpha = 0.6f))
                         Text(if (message.status == 1) " Sending..." else " Hidden", style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.6f))
                     }
                 }
+                
+
             }
         }
     }

@@ -180,7 +180,25 @@ async def delete_message(sid, data):
     else:
         print(f"Invalid delete request: {data}")
 
-print("✅ Socket.IO event handlers registered: connect, disconnect, send_message, delete_message")
+
+print("✅ Socket.IO event handlers registered: connect, disconnect, send_message, delete_message, user_status")
+
+@sio.event
+async def user_status(sid, data):
+    """
+    Handle user online/offline status updates.
+    Data: { 'username': ..., 'status': 'online'/'offline' }
+    """
+    username = data.get('username')
+    status = data.get('status')
+    
+    if username and status:
+        print(f"User {username} is now {status}")
+        # Broadcast to all connected clients
+        await sio.emit('user_status', data, skip_sid=sid)
+    else:
+        print(f"Invalid status update: {data}")
+
 
 
 @sio.event

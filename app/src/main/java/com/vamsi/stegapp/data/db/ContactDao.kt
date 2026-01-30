@@ -21,6 +21,18 @@ interface ContactDao {
     @Query("UPDATE contacts SET lastMessage = :message, lastMessageTime = :time, unreadCount = :unreadCount WHERE name = :chatName")
     suspend fun updateLastMessage(chatName: String, message: String, time: Long, unreadCount: Int = 0)
 
+    @Query("UPDATE contacts SET lastMessage = :message, lastMessageTime = :time WHERE name = :chatName")
+    suspend fun updateLastMessageOnly(chatName: String, message: String, time: Long)
+
+    @Query("UPDATE contacts SET lastMessage = :message, lastMessageTime = :time, unreadCount = unreadCount + 1 WHERE name = :chatName")
+    suspend fun incrementUnreadCount(chatName: String, message: String, time: Long)
+
     @Query("SELECT * FROM contacts WHERE name = :name LIMIT 1")
     suspend fun getContactById(name: String): ContactEntity?
+
+    @Query("UPDATE contacts SET unreadCount = 0 WHERE name = :name")
+    suspend fun resetUnreadCount(name: String)
+    
+    @Query("UPDATE contacts SET isOnline = :isOnline WHERE name = :contactId")
+    suspend fun updateContactStatus(contactId: String, isOnline: Boolean)
 }

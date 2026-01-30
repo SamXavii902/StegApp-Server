@@ -23,7 +23,19 @@ object UserPrefs {
         return !getUsername(context).isNullOrEmpty()
     }
     
+    
     fun clear(context: Context) {
         getPrefs(context).edit().clear().apply()
+    }
+    
+    // Permissions
+    private const val KEY_PERMISSIONS_REQUESTED = "permissions_requested"
+    
+    fun setPermissionsRequested(context: Context, requested: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_PERMISSIONS_REQUESTED, requested).apply()
+    }
+    
+    fun arePermissionsRequested(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_PERMISSIONS_REQUESTED, false)
     }
 }

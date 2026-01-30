@@ -10,5 +10,6 @@ data class ContactEntity(
     val lastMessage: String? = null,
     val lastMessageTime: Long = 0,
     val unreadCount: Int = 0,
-    val profileImageUri: String? = null
+    val profileImageUri: String? = null,
+    val isOnline: Boolean = false
 )

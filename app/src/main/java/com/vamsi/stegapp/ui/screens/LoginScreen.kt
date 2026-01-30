@@ -102,6 +102,13 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                         val response = com.vamsi.stegapp.network.NetworkModule.api.register(com.vamsi.stegapp.network.UserRequest(username.trim()))
                                         if (response.isSuccessful) {
                                             UserPrefs.saveUsername(context, username.trim())
+                                            // Start Background Service
+                                            val serviceIntent = android.content.Intent(context, com.vamsi.stegapp.service.SocketService::class.java)
+                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                                context.startForegroundService(serviceIntent)
+                                            } else {
+                                                context.startService(serviceIntent)
+                                            }
                                             navController.navigate("home") {
                                                 popUpTo("login") { inclusive = true }
                                             }
@@ -110,6 +117,13 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                             if (errorBody.contains("Username already exists")) {
                                                 // User exists, log them in!
                                                 UserPrefs.saveUsername(context, username.trim())
+                                                // Start Background Service
+                                                val serviceIntent = android.content.Intent(context, com.vamsi.stegapp.service.SocketService::class.java)
+                                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                                    context.startForegroundService(serviceIntent)
+                                                } else {
+                                                    context.startService(serviceIntent)
+                                                }
                                                 navController.navigate("home") {
                                                     popUpTo("login") { inclusive = true }
                                                 }

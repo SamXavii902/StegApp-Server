@@ -32,6 +32,14 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
     init {
         val username = UserPrefs.getUsername(context) ?: "Anonymous"
         SocketClient.connect(username)
+        // Reset unread count when opening chat
+        viewModelScope.launch {
+            try {
+                contactDao.resetUnreadCount(chatId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
     
     private val dao = AppDatabase.getDatabase(context).messageDao()
@@ -51,38 +59,79 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
     private val _success = MutableStateFlow<String?>(null)
     val success = _success.asStateFlow()
 
-    fun sendMessage(text: String, imageUri: Uri, secretKey: String) {
+    val isConnected = SocketClient.isConnected
+
+    fun sendMessage(text: String, imageUri: Uri?, secretKey: String, camouflageText: String? = null) {
         viewModelScope.launch {
             _error.value = null
             
-            // 1. Convert Uri to File path
-            val imagePath = copyUriToTempFile(imageUri)
-            if (imagePath == null) {
-                _error.value = "Failed to process image"
-                return@launch
-            }
-            // 2. Embed message
-            val result = repository.embedMessage(imagePath, text, secretKey)
-            
-            result.onSuccess { stegoPath ->
-                // Add to messages (Status = 1: SENDING)
+            val timestamp = System.currentTimeMillis()
+            val newId = java.util.UUID.randomUUID().toString()
+            val username = UserPrefs.getUsername(appContext) ?: "Anonymous"
+
+            if (imageUri != null) {
+                // --- STEGO IMAGE FLOW ---
+                
+                // 1. Convert Uri to File path
+                val imagePath = copyUriToTempFile(imageUri)
+                if (imagePath == null) {
+                    _error.value = "Failed to process image"
+                    return@launch
+                }
+                // 2. Embed message
+                val result = repository.embedMessage(imagePath, text, secretKey)
+                
+                result.onSuccess { stegoPath ->
+                    // Add to messages (Status = 1: SENDING)
+                    val newMessage = Message(
+                        id = newId,
+                        chatId = chatId,
+                        text = null,
+                        imageUri = Uri.fromFile(File(stegoPath)),
+                        isFromMe = true,
+                        isStego = true,
+                        status = 1, // SENDING
+                        timestamp = timestamp
+                    )
+                    dao.insertMessage(newMessage.toEntity())
+                    contactDao.updateLastMessage(chatId, "Sent a hidden message", timestamp, 0)
+                    
+                    // Upload
+                    uploadStegoImage(stegoPath, newMessage, camouflageText)
+                }.onFailure {
+                    _error.value = "Embedding failed: ${it.message}"
+                }
+            } else {
+                // --- TEXT-ONLY (STEALTH) FLOW ---
+                
                 val newMessage = Message(
-                    id = java.util.UUID.randomUUID().toString(),
+                    id = newId,
                     chatId = chatId,
-                    text = null,
-                    imageUri = Uri.fromFile(File(stegoPath)),
+                    text = text,
+                    imageUri = null,
                     isFromMe = true,
-                    isStego = true,
-                    status = 1, // SENDING
-                    timestamp = System.currentTimeMillis()
+                    isStego = false, // Pure text
+                    status = 0, // SENT (No upload needed)
+                    timestamp = timestamp
                 )
                 dao.insertMessage(newMessage.toEntity())
-                contactDao.updateLastMessage(chatId, "Sent a hidden message", newMessage.timestamp, 0)
                 
-                // Upload
-                uploadStegoImage(stegoPath, newMessage)
-            }.onFailure {
-                _error.value = "Embedding failed: ${it.message}"
+                // If text-only has camouflage, showing "Sent a hidden message" in chat list might be confusing?
+                // User said "stealth would show up as notification". 
+                // In app list, better show the REAL text for me? Or "Sent a hidden message"?
+                // Standard apps show real text.
+                contactDao.updateLastMessage(chatId, text, timestamp, 0)
+
+                // Emit
+                SocketClient.emitMessage(
+                    id = newId,
+                    text = text,
+                    imageUrl = null,
+                    sender = username,
+                    recipient = chatId,
+                    camouflageText = camouflageText,
+                    timestamp = timestamp
+                )
             }
         }
     }
@@ -122,21 +171,24 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
     }
 
     fun downloadMedia(message: Message) {
-        viewModelScope.launch {
+        // Use GlobalScope to ensure download continues even if ChatScreen is closed
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 // Update status to DOWNLOADING (3)
                 val downloadingMsg = message.toEntity().copy(status = 3)
                 dao.insertMessage(downloadingMsg) // Updates existing
 
                 val url = message.imageUri.toString()
-                val request = okhttp3.Request.Builder().url(url).build()
-                val response = with(kotlinx.coroutines.Dispatchers.IO) {
-                     okhttp3.OkHttpClient().newCall(request).execute()
-                }
+                android.util.Log.e("ChatViewModel", "Attempting download from: $url")
                 
-                if (!response.isSuccessful) throw Exception("Download Failed: ${response.code}")
+                val request = okhttp3.Request.Builder().url(url).build()
+                val response = okhttp3.OkHttpClient().newCall(request).execute()
+                
+                android.util.Log.e("ChatViewModel", "Download Response: ${response.code} ${response.message}")
+                
+                if (!response.isSuccessful) throw Exception("HTTP ${response.code}: ${response.message}")
 
-                val bytes = response.body?.bytes() ?: throw Exception("Empty body")
+                val bytes = response.body?.bytes() ?: throw Exception("Empty Response Body")
                 
                 // Save to Gallery
                 val filename = "Stego_${System.currentTimeMillis()}.png"
@@ -160,14 +212,16 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                 dao.insertMessage(downloadedMsg)
                 
             } catch (e: Exception) {
-                _error.value = "Download Error: ${e.message}"
+                e.printStackTrace()
+                // Show FULL error (Class Name + Message) to debug "null" errors
+                _error.value = "Download Error: $e" 
                 // Revert status
                  dao.insertMessage(message.toEntity().copy(status = 2)) // Back to Pending
             }
         }
     }
 
-    private fun uploadStegoImage(path: String, message: Message) {
+    private fun uploadStegoImage(path: String, message: Message, camouflageText: String? = null) {
         viewModelScope.launch {
             try {
                 val file = File(path)
@@ -183,10 +237,12 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                     dao.insertMessage(message.toEntity().copy(status = 0))
 
                     SocketClient.emitMessage(
+                        id = message.id,
                         text = null, 
                         imageUrl = url, 
                         sender = username,
                         recipient = chatId,
+                        camouflageText = camouflageText,
                         timestamp = message.timestamp
                     )
                     // _success.value = "Sent!" // Toast removed as requested
@@ -216,13 +272,16 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        SocketClient.disconnect()
-    }
 
-    fun deleteMessage(message: Message) {
+
+    fun deleteMessage(message: Message, deleteForEveryone: Boolean = false) {
         viewModelScope.launch {
+            // 1. Remote Delete (if requested)
+            if (deleteForEveryone) {
+                SocketClient.emitDeleteMessage(message.id, chatId)
+            }
+
+            // 2. Local Delete
             dao.deleteMessage(message.toEntity())
             
             // Sync Last Message with Contact
