@@ -162,23 +162,16 @@ fun ChatScreen(
     val isContactOnline by viewModel.contactOnlineStatus.collectAsState(initial = false)
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var textInput by remember { mutableStateOf("") }
-    var passwordInput by remember { mutableStateOf("strongPassword123") }
+    // Password state removed (Auto-Key Exchange)
+    
     // Initialize with passed image if available
     var selectedImageUri by remember { mutableStateOf<Uri?>(initialImageUri?.let { Uri.parse(it) }) }
-    var showPasswordSheet by remember { mutableStateOf(false) }
     var currentMode by remember { mutableStateOf(ChatMode.HIDE) }
     
     // Stealth & Camouflage State
     var isStealthMode by remember { mutableStateOf(false) }
     var showCamouflageDialog by remember { mutableStateOf(false) }
     var camouflageInput by remember { mutableStateOf("") }
-    // We already have textInput and selectedImageUri hoisted, so no need for pending vars if we don't clear them immediately.
-    // Actually, onSend clears them. So we need to NOT clear them if stealth mode triggers dialog.
-    // Or just Capture them in the Dialog logic context.
-    // But `AlertDialog` is separate.
-    // Since `textInput` and `selectedImageUri` are state, they persist until we change them.
-    // So if we just set `showCamouflageDialog = true` inside `onSend` and DON'T clear, the state remains.
-    // Then in Dialog Confirm, we send and THEN clear. Perfect.
 
     SideEffect {
         val window = (view.context as Activity).window
@@ -203,16 +196,15 @@ fun ChatScreen(
     val pickImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedImageUri = uri
         if (uri != null) {
-            if (currentMode == ChatMode.EXTRACT) viewModel.receiveMessage(uri, passwordInput)
-            else showPasswordSheet = true
+            if (currentMode == ChatMode.EXTRACT) viewModel.receiveMessage(uri) 
+            // else showPasswordSheet = true // Removed
         }
     }
     
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && tempCameraUri != null) {
             selectedImageUri = tempCameraUri
-             if (currentMode == ChatMode.EXTRACT) viewModel.receiveMessage(tempCameraUri!!, passwordInput)
-            else showPasswordSheet = true
+             if (currentMode == ChatMode.EXTRACT) viewModel.receiveMessage(tempCameraUri!!)
         }
     }
 
@@ -240,7 +232,7 @@ fun ChatScreen(
                     showCamouflageDialog = false
                     if (selectedImageUri != null || textInput.isNotBlank()) {
                          // selectedImageUri is nullable in viewModel.sendMessage, so this is safe now
-                        viewModel.sendMessage(textInput, selectedImageUri, passwordInput, camouflageInput)
+                        viewModel.sendMessage(textInput, selectedImageUri, camouflageInput)
                         // Clear Everything
                         textInput = ""
                         selectedImageUri = null
@@ -256,10 +248,8 @@ fun ChatScreen(
 
     ChatScreenContent(
         chatName = chatName, messages = messages, isDark = isDark, textInput = textInput,
-        onTextInputChange = { textInput = it }, passwordInput = passwordInput,
-        onPasswordChange = { passwordInput = it }, selectedImageUri = selectedImageUri,
-        showPasswordSheet = showPasswordSheet, onTogglePasswordSheet = { showPasswordSheet = !showPasswordSheet },
-        onDismissPasswordSheet = { showPasswordSheet = false }, currentMode = currentMode,
+        onTextInputChange = { textInput = it }, selectedImageUri = selectedImageUri,
+        currentMode = currentMode,
         onModeChange = { currentMode = it }, onBack = { navController.popBackStack() },
         onPickImage = { pickImageLauncher.launch("image/*") },
         onCameraClick = {
@@ -282,7 +272,7 @@ fun ChatScreen(
                  }
             } else {
                 if (selectedImageUri != null || textInput.isNotBlank()) {
-                    viewModel.sendMessage(textInput, selectedImageUri, passwordInput)
+                    viewModel.sendMessage(textInput, selectedImageUri)
                     textInput = ""; selectedImageUri = null
                 }
             }
@@ -302,9 +292,8 @@ fun ChatScreen(
 @Composable
 fun ChatScreenContent(
     chatName: String, messages: List<Message>, isDark: Boolean, textInput: String,
-    onTextInputChange: (String) -> Unit, passwordInput: String, onPasswordChange: (String) -> Unit,
-    selectedImageUri: Uri?, showPasswordSheet: Boolean, onTogglePasswordSheet: () -> Unit,
-    onDismissPasswordSheet: () -> Unit, currentMode: ChatMode, onModeChange: (ChatMode) -> Unit,
+    onTextInputChange: (String) -> Unit,
+    selectedImageUri: Uri?, currentMode: ChatMode, onModeChange: (ChatMode) -> Unit,
 
     onBack: () -> Unit, onPickImage: () -> Unit, onSend: () -> Unit, onError: (String) -> Unit,
     onDeleteMessage: (Message, Boolean) -> Unit, onDownloadMessage: (Message) -> Unit, onRemoveImage: () -> Unit,
@@ -364,6 +353,11 @@ fun ChatScreenContent(
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isContactOnline) Color(0xFF4CAF50) else Color(0xFFFF5252)
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Lock, "Encrypted", tint = Color.Gray, modifier = Modifier.size(10.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("E2EE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
                     }
                 }
 
@@ -546,15 +540,16 @@ fun ChatScreenContent(
                     }
                 }
 
-                // 3. LOCK BUTTON (Right)
-                Surface(shape = CircleShape, color = saiDockBackground, shadowElevation = 0.dp, tonalElevation = 0.dp, modifier = Modifier.size(56.dp).shadow(buttonShadowElevation, CircleShape, spotColor = globalShadowColor, ambientColor = globalShadowColor)) {
-                    IconButton(onClick = onTogglePasswordSheet) { Icon(Icons.Default.Lock, "Key", tint = if (passwordInput == "strongPassword123") Color.Gray else saiIconTint) }
-                }
+                // 3. LOCK BUTTON (Right) - Removed (Auto-Key)
+                // Surface(shape = CircleShape, color = saiDockBackground, shadowElevation = 0.dp, tonalElevation = 0.dp, modifier = Modifier.size(56.dp).shadow(buttonShadowElevation, CircleShape, spotColor = globalShadowColor, ambientColor = globalShadowColor)) {
+                //    IconButton(onClick = onTogglePasswordSheet) { Icon(Icons.Default.Lock, "Key", tint = if (passwordInput == "strongPassword123") Color.Gray else saiIconTint) }
+                // }
+                 Box(modifier = Modifier.size(56.dp)) // Spacer to keep layout balanced
             }
         }
-        AnimatedVisibility(visible = showPasswordSheet, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
-            PasswordBottomSheet(passwordInput, onPasswordChange, onDismissPasswordSheet)
-        }
+        // AnimatedVisibility(visible = showPasswordSheet, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
+        //    PasswordBottomSheet(passwordInput, onPasswordChange, onDismissPasswordSheet)
+        // }
 
         // Message Options Overlay (Simplified Layout for Z-Index)
         if (selectedMessage != null) {

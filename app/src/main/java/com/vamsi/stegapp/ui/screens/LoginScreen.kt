@@ -124,7 +124,17 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                 isLoading = true
                                 scope.launch {
                                     try {
-                                        val response = com.vamsi.stegapp.network.NetworkModule.api.register(com.vamsi.stegapp.network.UserRequest(username.trim()))
+                                        // 1. Ensure KeyPair Exists
+                                        var pubKey = com.vamsi.stegapp.security.KeyManager.getPublicKey()
+                                        if (pubKey == null) {
+                                            pubKey = com.vamsi.stegapp.security.KeyManager.generateKeyPair()
+                                        }
+
+                                        // 2. Register with Public Key
+                                        val response = com.vamsi.stegapp.network.NetworkModule.api.register(
+                                            com.vamsi.stegapp.network.UserRequest(username.trim(), pubKey)
+                                        )
+                                        
                                         if (response.isSuccessful) {
                                             UserPrefs.saveUsername(context, username.trim())
                                             // Start Background Service
@@ -143,6 +153,20 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                             if (errorBody.contains("Username already exists")) {
                                                 // User exists, log them in!
                                                 UserPrefs.saveUsername(context, username.trim())
+                                                
+                                                // 3. Upload Key (Sync) for existing user
+                                                if (pubKey != null) {
+                                                    try {
+                                                        com.vamsi.stegapp.network.NetworkModule.api.uploadKey(
+                                                            com.vamsi.stegapp.network.KeyUploadRequest(username.trim(), pubKey)
+                                                        )
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                        // Proceed even if upload fails (offline login scenario?)
+                                                        // But for initial setup, it might be an issue.
+                                                    }
+                                                }
+
                                                 // Start Background Service
                                                 val serviceIntent = android.content.Intent(context, com.vamsi.stegapp.service.SocketService::class.java)
                                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -161,6 +185,7 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                                         }
                                     } catch (e: Exception) {
                                         isLoading = false
+                                        e.printStackTrace()
                                         android.widget.Toast.makeText(context, "Connection Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                                     }
                                 }

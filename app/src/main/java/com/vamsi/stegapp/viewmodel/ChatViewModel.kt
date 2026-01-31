@@ -30,6 +30,9 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
     private val repository = StegoRepository(context)
     private val appContext = context.applicationContext
 
+    // Shared Secret (ECDH)
+    private var derivedSecretKey: String? = null
+
     init {
         val username = UserPrefs.getUsername(context) ?: "Anonymous"
         SocketClient.connect(username)
@@ -37,8 +40,22 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
         viewModelScope.launch {
             try {
                 contactDao.resetUnreadCount(chatId)
+                
+                // Fetch Public Key & Derive Secret
+                val response = NetworkModule.api.fetchKey(chatId)
+                if (response.isSuccessful && response.body() != null) {
+                    val remoteKey = response.body()!!.publicKey
+                    derivedSecretKey = com.vamsi.stegapp.security.KeyManager.deriveSharedSecret(remoteKey)
+                    if (derivedSecretKey == null) {
+                       _error.value = "Failed to secure connection (Key Derivation Error)"
+                    }
+                } else {
+                    _error.value = "Could not fetch encryption keys for $chatId"
+                }
+
             } catch (e: Exception) {
                 e.printStackTrace()
+                _error.value = "Connection Error during Key Exchange"
             }
         }
     }
@@ -68,7 +85,13 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
 
-    fun sendMessage(text: String, imageUri: Uri?, secretKey: String, camouflageText: String? = null) {
+    fun sendMessage(text: String, imageUri: Uri?, camouflageText: String? = null) {
+        if (derivedSecretKey == null) {
+            _error.value = "Secure connection not established. Please re-open chat."
+            return
+        }
+        val secretKey = derivedSecretKey!!
+
         viewModelScope.launch {
             _error.value = null
             
@@ -123,10 +146,6 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                 )
                 dao.insertMessage(newMessage.toEntity())
                 
-                // If text-only has camouflage, showing "Sent a hidden message" in chat list might be confusing?
-                // User said "stealth would show up as notification". 
-                // In app list, better show the REAL text for me? Or "Sent a hidden message"?
-                // Standard apps show real text.
                 contactDao.updateLastMessage(chatId, text, timestamp, 0)
 
                 // Emit
@@ -143,7 +162,13 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
         }
     }
 
-    fun receiveMessage(imageUri: Uri, secretKey: String) {
+    fun receiveMessage(imageUri: Uri) {
+        if (derivedSecretKey == null) {
+            _error.value = "Secure connection not established."
+            return
+        }
+        val secretKey = derivedSecretKey!!
+
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null

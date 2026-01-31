@@ -46,9 +46,16 @@ db = mongo_client["steg_app_db"]
 users_collection = db["users"]
 messages_collection = db["messages"]
 
+from typing import Optional
+
 # --- Pydantic Models ---
 class UserRegister(BaseModel):
     username: str
+    public_key: Optional[str] = None  # Base64 encoded public key
+
+class KeyUpload(BaseModel):
+    username: str
+    public_key: str
 
 # --- Socket.IO Setup ---
 # Async Socket.IO server
@@ -84,7 +91,11 @@ async def register(user: UserRegister):
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     
-    users_collection.insert_one({"username": user.username, "socket_id": None})
+    users_collection.insert_one({
+        "username": user.username, 
+        "socket_id": None,
+        "public_key": user.public_key
+    })
     return {"status": "success", "username": user.username}
 
 @app.get("/check_user/{username}")
@@ -96,6 +107,34 @@ async def check_user(username: str):
     if user:
         return {"exists": True}
     return {"exists": False}
+
+@app.post("/keys/upload")
+async def upload_key(data: KeyUpload):
+    """
+    Updates the public key for a user.
+    """
+    result = users_collection.update_one(
+        {"username": data.username},
+        {"$set": {"public_key": data.public_key}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "success"}
+
+@app.get("/keys/fetch/{username}")
+async def fetch_key(username: str):
+    """
+    Retrieves the public key for a specific user.
+    """
+    user = users_collection.find_one({"username": username})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    public_key = user.get("public_key")
+    if not public_key:
+        raise HTTPException(status_code=404, detail="User has no public key")
+        
+    return {"username": username, "public_key": public_key}
 
 @app.post("/upload/")
 async def upload_image(file: UploadFile = File(...)):
