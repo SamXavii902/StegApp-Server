@@ -941,8 +941,8 @@ fun MessageBubble(
                              }
                              
                              // Upload Pill (Bottom Start)
-                             Box(modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                             Box(modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) { // Matched padding
+                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { // Matched spacing
                                       if (uploadProgress != null && uploadProgress > 0f) {
                                           CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(12.dp), color = Color.White, strokeWidth = 2.dp)
                                           if (fileSize > 0) {
