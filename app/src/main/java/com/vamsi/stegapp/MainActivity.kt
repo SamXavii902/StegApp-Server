@@ -969,7 +969,7 @@ fun MessageBubble(
                                     if (isMe) {
                                          val (icon, tint) = when {
                                              message.status == 1 -> Icons.Rounded.AccessTime to Color.White.copy(alpha = 0.7f)
-                                             message.deliveryStatus == 3 -> Icons.Rounded.CheckCircle to Color(0xFF34B7F1)
+                                             message.deliveryStatus == 3 -> Icons.Rounded.DoneAll to Color(0xFF34B7F1) // Read = Double Tick Blue
                                              message.deliveryStatus == 2 -> Icons.Rounded.CheckCircle to Color.White
                                              else -> Icons.Outlined.CheckCircle to Color.White
                                          }
@@ -992,7 +992,7 @@ fun MessageBubble(
                         if (isMe) {
                              val (icon, tint) = when {
                                  message.status == 1 -> Icons.Rounded.AccessTime to contentColor.copy(alpha = 0.6f)
-                                 message.deliveryStatus == 3 -> Icons.Rounded.CheckCircle to Color(0xFF34B7F1)
+                                 message.deliveryStatus == 3 -> Icons.Rounded.DoneAll to Color(0xFF34B7F1) // Read = Double Tick Blue
                                  message.deliveryStatus == 2 -> Icons.Rounded.CheckCircle to contentColor.copy(alpha = 0.6f)
                                  else -> Icons.Outlined.CheckCircle to contentColor.copy(alpha = 0.6f)
                              }
