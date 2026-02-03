@@ -38,4 +38,7 @@ interface ContactDao {
 
     @Query("SELECT * FROM contacts WHERE name = :name")
     fun getContactFlow(name: String): kotlinx.coroutines.flow.Flow<ContactEntity?>
+
+    @Query("UPDATE contacts SET publicKey = :key WHERE name = :contactId")
+    suspend fun updatePublicKey(contactId: String, key: String)
 }

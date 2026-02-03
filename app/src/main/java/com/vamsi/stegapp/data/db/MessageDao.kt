@@ -44,4 +44,7 @@ interface MessageDao {
 
     @Query("UPDATE messages SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: Int)
+
+    @Query("SELECT MAX(timestamp) FROM messages WHERE isFromMe = 0")
+    suspend fun getLastReceivedTimestamp(): Long?
 }

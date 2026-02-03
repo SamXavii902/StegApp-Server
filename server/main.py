@@ -238,6 +238,64 @@ async def delete_message(sid, data):
 
 print("✅ Socket.IO event handlers registered: connect, disconnect, send_message, delete_message, user_status, message_read")
 
+
+@sio.event
+async def sync_messages(sid, data):
+    """
+    Handle sync request from client.
+    Data: { 'username': ..., 'lastTimestamp': ... }
+    """
+    username = data.get('username')
+    last_timestamp = data.get('lastTimestamp', 0)
+    
+    # Ensure timestamp is treated as int/long
+    try:
+        last_timestamp = int(last_timestamp)
+    except:
+        last_timestamp = 0
+        
+    print(f"🔄 Sync request from {username} (Last: {last_timestamp})")
+    
+    # Query: Recipient == username, Timestamp > last_timestamp
+    query = {
+        "recipient": username,
+        "timestamp": {"$gt": last_timestamp}
+    }
+    
+    # Use sort to send in order
+    cursor = messages_collection.find(query).sort("timestamp", 1)
+    
+    count = 0
+    # Async iteration over cursor
+    async for msg in cursor:
+        msg_data = {
+            "id": msg.get("id"),
+            "text": msg.get("text"),
+            "imageUrl": msg.get("imageUrl"),
+            "sender": msg.get("sender"),
+            "recipient": msg.get("recipient"),
+            "camouflageText": msg.get("camouflageText"),
+            "timestamp": msg.get("timestamp"),
+            "replyToId": msg.get("replyToId")
+        }
+        await sio.emit('new_message', msg_data, room=sid)
+        
+        # Mark as delivered since we just synced it
+        messages_collection.update_one({"_id": msg["_id"]}, {"$set": {"delivered": True}})
+        
+        # Notify Sender
+        sender = msg.get("sender")
+        sender_user = users_collection.find_one({"username": sender})
+        if sender_user and sender_user.get("socket_id"):
+             await sio.emit('message_status', {
+                'messageId': msg.get("id"),
+                'status': 'delivered'
+            }, room=sender_user["socket_id"])
+            
+        count += 1
+        
+    print(f"✅ Synced {count} missed messages to {username}")
+
 @sio.event
 async def user_status(sid, data):
     """

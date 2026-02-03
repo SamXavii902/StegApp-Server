@@ -11,5 +11,6 @@ data class ContactEntity(
     val lastMessageTime: Long = 0,
     val unreadCount: Int = 0,
     val profileImageUri: String? = null,
-    val isOnline: Boolean = false
+    val isOnline: Boolean = false,
+    val publicKey: String? = null // Cache PK for offline access
 )

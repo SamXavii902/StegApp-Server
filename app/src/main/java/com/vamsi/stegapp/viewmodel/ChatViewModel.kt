@@ -57,21 +57,43 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                     SocketClient.emitMessageRead(msg.id, username)
                 }
                 
-                // Fetch Public Key & Derive Secret
-                val response = NetworkModule.api.fetchKey(chatId)
-                if (response.isSuccessful && response.body() != null) {
-                    val remoteKey = response.body()!!.publicKey
-                    derivedSecretKey = com.vamsi.stegapp.security.KeyManager.deriveSharedSecret(remoteKey)
-                    if (derivedSecretKey == null) {
-                       _error.value = "Failed to secure connection (Key Derivation Error)"
+                // 1. Try Load from DB Cache (Offline Support)
+                val cachedContact = contactDao.getContactById(chatId)
+                if (cachedContact?.publicKey != null) {
+                    derivedSecretKey = com.vamsi.stegapp.security.KeyManager.deriveSharedSecret(cachedContact.publicKey)
+                }
+
+                // 2. Fetch Fresh Key from Network (if online)
+                try {
+                    val response = NetworkModule.api.fetchKey(chatId)
+                    if (response.isSuccessful && response.body() != null) {
+                        val remoteKey = response.body()!!.publicKey
+                        
+                        // Save to DB
+                        contactDao.updatePublicKey(chatId, remoteKey)
+                        
+                        // Update derived key (fresh)
+                        derivedSecretKey = com.vamsi.stegapp.security.KeyManager.deriveSharedSecret(remoteKey)
+                    } else {
+                         if (derivedSecretKey == null) {
+                             _error.value = "Could not fetch encryption keys for $chatId"
+                         }
                     }
-                } else {
-                    _error.value = "Could not fetch encryption keys for $chatId"
+                } catch (e: Exception) {
+                    // If we have a cached key, suppress network error
+                    if (derivedSecretKey == null) {
+                        e.printStackTrace()
+                        _error.value = "Connection Error: ${e.message}"
+                    }
+                }
+
+                if (derivedSecretKey == null) {
+                    _error.value = "Secure connection not established. App functionality limited."
                 }
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                _error.value = "Connection Error during Key Exchange"
+                if (derivedSecretKey == null) _error.value = "Connection Error during Key Exchange"
             }
         }
         

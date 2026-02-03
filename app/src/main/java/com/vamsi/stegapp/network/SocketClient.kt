@@ -155,4 +155,13 @@ object SocketClient {
         Log.d(TAG, "👁️ EMITTING READ RECEIPT: messageId=$messageId")
         socket?.emit("message_read", json)
     }
+
+    fun emitSyncRequest(username: String, lastTimestamp: Long) {
+        val json = JSONObject().apply {
+            put("username", username)
+            put("lastTimestamp", lastTimestamp)
+        }
+        Log.d(TAG, "🔄 EMITTING SYNC REQUEST: timestamp=$lastTimestamp")
+        socket?.emit("sync_messages", json)
+    }
 }

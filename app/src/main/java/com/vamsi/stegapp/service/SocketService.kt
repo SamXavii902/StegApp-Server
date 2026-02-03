@@ -129,6 +129,21 @@ class SocketService : Service() {
                     }
                 }
             }
+
+            // Sync Missed Messages on Reconnect
+            serviceScope.launch {
+                SocketClient.isConnected.collect { connected ->
+                    if (connected) {
+                         val dao = AppDatabase.getDatabase(applicationContext).messageDao()
+                         val lastTimestamp = dao.getLastReceivedTimestamp() ?: 0L
+                         val user = UserPrefs.getUsername(applicationContext)
+                         if (user != null) {
+                             SocketClient.emitSyncRequest(user, lastTimestamp)
+                             Log.d("SocketService", "Triggered Sync from $lastTimestamp")
+                         }
+                    }
+                }
+            }
         }
     }
 
