@@ -596,6 +596,13 @@ fun ChatScreenContent(
                }
             }
 
+            // Auto-Scroll to Bottom on Send
+            LaunchedEffect(messages.size) {
+                 if (messages.isNotEmpty() && messages.last().isFromMe) {
+                     listState.animateScrollToItem(0)
+                 }
+            }
+
             if (messages.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().padding(bottom = 100.dp), contentAlignment = Alignment.Center) {
                     Text(
