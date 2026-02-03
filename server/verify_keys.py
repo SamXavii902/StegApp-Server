@@ -12,7 +12,19 @@ BASE_URL = "https://stegapp-server.onrender.com" # Cloud (Use this if testing ag
 BASE_URL = "https://stegapp-server.onrender.com"
 
 def test_key_exchange():
-    print(f"Testing Key Exchange on {BASE_URL}")
+    print("--- STARTING VERIFICATION ---")
+    print(f"Target URL: {BASE_URL}")
+    try:
+        # Check Root
+        print("1. Checking Root Endpoint...")
+        resp = requests.get(f"{BASE_URL}/", timeout=10)
+        print(f"   Root Status: {resp.status_code}")
+        print(f"   Root Msg: {resp.json()}")
+    except Exception as e:
+        print(f"   Root Check Failed: {e}")
+        return
+
+    # 1. Register User A
 
     # 1. Register User A
     user_a = "TestUserA_" + os.urandom(4).hex()

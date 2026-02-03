@@ -102,6 +102,33 @@ class SocketService : Service() {
                     }
                 }
             }
+
+            // Listen for Message Status Updates (Delivered/Read)
+            serviceScope.launch {
+                SocketClient.messageStatusUpdates.collect { data ->
+                    val messageId = data.optString("messageId")
+                    val statusStr = data.optString("status") // "delivered", "read"
+                    
+                    if (!messageId.isNullOrEmpty() && !statusStr.isNullOrEmpty()) {
+                        val dao = AppDatabase.getDatabase(applicationContext).messageDao()
+                        
+                        // Map status string to integer
+                        // 1=Sent, 2=Delivered, 3=Read
+                        val statusInt = when (statusStr) {
+                            "delivered" -> 2
+                            "read" -> 3
+                            else -> 1
+                        }
+                        
+                        // Only update if new status is "greater" (progressed)
+                        // Actually, just update.
+                        if (statusInt > 1) {
+                            dao.updateDeliveryStatus(messageId, statusInt)
+                            Log.d("SocketService", "Updated msg $messageId status to $statusInt ($statusStr)")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -127,6 +154,7 @@ class SocketService : Service() {
                 val text = if (message.isNull("text")) null else message.getString("text")
                 val imageUrl = if (message.isNull("imageUrl")) null else message.getString("imageUrl")
                 val camouflageText = if (message.isNull("camouflageText")) null else message.getString("camouflageText")
+                val replyToId = if (message.isNull("replyToId")) null else message.getString("replyToId")
                 // Use current time if timestamp is missing or weird, but prefer message timestamp
                 val timestamp = message.optLong("timestamp", System.currentTimeMillis())
 
@@ -155,12 +183,13 @@ class SocketService : Service() {
                     isFromMe = false,
                     isStego = imageUrl != null,
                     status = if (imageUrl != null) 2 else 4, // 2: REMOTE/PENDING, 4: RECEIVED/REVEALED (Text-only)
-                    timestamp = timestamp
+                    timestamp = timestamp,
+                    replyToId = replyToId
                 )
                 dao.insertMessage(newMessage)
 
                 // 3. Update Last Message
-                val displayMsg = camouflageText ?: text ?: (if (imageUrl != null) "Received a hidden message" else "New Message")
+                val displayMsg = camouflageText?: text ?: (if (imageUrl != null) "Received an image" else "New Message")
                 contactDao.incrementUnreadCount(sender, displayMsg, timestamp)
 
                 // 4. Notification
@@ -175,7 +204,7 @@ class SocketService : Service() {
                         }
                     }
                     
-                    val contentText = camouflageText ?: text ?: (if (imageUrl != null) "Received a hidden image" else "New Message")
+                    val contentText = camouflageText ?: text ?: (if (imageUrl != null) "Received an image" else "New Message")
                     showNewMessageNotification(sender, contentText, bitmap)
                 }
             } catch (e: Exception) {

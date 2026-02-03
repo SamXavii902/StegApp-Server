@@ -144,18 +144,24 @@ async def upload_image(file: UploadFile = File(...)):
     """
     try:
         # Upload to Cloudinary (Enforce PNG and Lossless via quality)
+        # Increased timeout to 300s for large files
+        print(f"Starting upload for {file.filename}...")
         result = cloudinary.uploader.upload(
             file.file, 
             resource_type="image",
             format="png",
-            quality="100"
+            quality="100",
+            timeout=300 
         )
         # Get the URL
         url = result.get("secure_url")
+        print(f"Upload success: {url}")
         return {"status": "success", "url": url, "filename": file.filename}
     except Exception as e:
         print(f"Upload Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload Failed: {str(e)}")
 
 # --- Socket.IO Events ---
 @sio.event
@@ -184,6 +190,16 @@ async def connect(sid, environ):
             # Mark as delivered
             messages_collection.update_one({"_id": msg["_id"]}, {"$set": {"delivered": True}})
             print(f"Synced offline message from {data['sender']} to {username}")
+            
+            # ✅ Send delivery confirmation to sender
+            sender_user = users_collection.find_one({"username": data['sender']})
+            if sender_user and sender_user.get("socket_id"):
+                await sio.emit('message_status', {
+                    'messageId': data['id'],
+                    'status': 'delivered'
+                }, room=sender_user["socket_id"])
+                print(f"✅ Sent 'delivered' status to {data['sender']} for offline message")
+
 
     else:
         print(f"Client connected (Anonymous): {sid}")
@@ -220,7 +236,7 @@ async def delete_message(sid, data):
         print(f"Invalid delete request: {data}")
 
 
-print("✅ Socket.IO event handlers registered: connect, disconnect, send_message, delete_message, user_status")
+print("✅ Socket.IO event handlers registered: connect, disconnect, send_message, delete_message, user_status, message_read")
 
 @sio.event
 async def user_status(sid, data):
@@ -248,16 +264,19 @@ async def send_message(sid, data):
     """
     print(f"Message received: {data}")
     recipient = data.get('recipient')
+    sender = data.get('sender')
+    message_id = data.get('id')
     
     # ALWAYS Save to DB first (Persistence)
     msg_doc = {
-        "id": data.get("id"),
+        "id": message_id,
         "text": data.get("text"),
         "imageUrl": data.get("imageUrl"),
-        "sender": data.get("sender"),
+        "sender": sender,
         "recipient": recipient,
         "timestamp": data.get("timestamp"), # Client should send TS or Server adds it
-        "delivered": False
+        "delivered": False,
+        "read": False
     }
     result = messages_collection.insert_one(msg_doc)
     
@@ -269,13 +288,59 @@ async def send_message(sid, data):
             # Try to emit
             await sio.emit('new_message', data, room=target_sid)
             print(f"Sent to {recipient} at {target_sid}")
-            # Mark as delivered
+            # Mark as delivered in DB
             messages_collection.update_one({"_id": result.inserted_id}, {"$set": {"delivered": True}})
+            
+            # ✅ SEND DELIVERY CONFIRMATION TO SENDER
+            sender_user = users_collection.find_one({"username": sender})
+            if sender_user and sender_user.get("socket_id"):
+                await sio.emit('message_status', {
+                    'messageId': message_id,
+                    'status': 'delivered'
+                }, room=sender_user["socket_id"])
+                print(f"✅ Sent 'delivered' status to {sender}")
         else:
             print(f"Recipient {recipient} offline. Message queued.")
     else:
         # Fallback to broadcast (Old behavior - rarely used now)
         await sio.emit('new_message', data)
+
+
+@sio.event
+async def message_read(sid, data):
+    """
+    Handle read receipt from recipient.
+    Data: { 'messageId': ..., 'reader': ... }
+    """
+    message_id = data.get('messageId')
+    reader = data.get('reader')
+    
+    print(f"👁️ Read receipt: {reader} read message {message_id}")
+    
+    # Update DB to mark as read
+    messages_collection.update_one(
+        {"id": message_id},
+        {"$set": {"read": True}}
+    )
+    
+    # Find the original message to get sender
+    msg = messages_collection.find_one({"id": message_id})
+    if msg:
+        sender = msg.get("sender")
+        
+        # Send read status to original sender
+        sender_user = users_collection.find_one({"username": sender})
+        if sender_user and sender_user.get("socket_id"):
+            await sio.emit('message_status', {
+                'messageId': message_id,
+                'status': 'read'
+            }, room=sender_user["socket_id"])
+            print(f"✅ Sent 'read' status to {sender}")
+        else:
+            print(f"⚠️ Sender {sender} offline, read receipt not sent")
+    else:
+        print(f"⚠️ Message {message_id} not found in database")
+
 
 
 if __name__ == "__main__":

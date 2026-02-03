@@ -12,5 +12,7 @@ data class MessageEntity(
     val isFromMe: Boolean,
     val isStego: Boolean,
     val status: Int = 0,
-    val timestamp: Long
+    val deliveryStatus: Int = 0,
+    val timestamp: Long,
+    val replyToId: String? = null // Added for Reply Logic
 )

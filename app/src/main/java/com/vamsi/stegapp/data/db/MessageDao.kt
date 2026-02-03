@@ -18,6 +18,9 @@ interface MessageDao {
     @Delete
     suspend fun deleteMessage(message: MessageEntity)
 
+    @Delete
+    suspend fun deleteMessages(messages: List<MessageEntity>)
+
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteMessageById(id: String)
     
@@ -29,4 +32,16 @@ interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastMessage(chatId: String): MessageEntity?
+
+    @Query("UPDATE messages SET deliveryStatus = :status WHERE id = :id")
+    suspend fun updateDeliveryStatus(id: String, status: Int)
+
+    @Query("SELECT * FROM messages WHERE text LIKE '%' || :query || '%' ORDER BY timestamp DESC")
+    fun searchMessages(query: String): Flow<List<MessageEntity>>
+
+    @Query("SELECT * FROM messages WHERE chatId = :chatId AND status = 1 AND isStego = 0")
+    suspend fun getPendingTextMessages(chatId: String): List<MessageEntity>
+
+    @Query("UPDATE messages SET status = :status WHERE id = :id")
+    suspend fun updateStatus(id: String, status: Int)
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,7 +23,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vamsi.stegapp.viewmodel.ContactViewModel
 import com.vamsi.stegapp.viewmodel.ContactViewModelFactory
 import com.vamsi.stegapp.data.db.ContactEntity
-import androidx.compose.ui.draw.clip
+import com.vamsi.stegapp.viewmodel.HomeUiState
+import com.vamsi.stegapp.data.db.MessageEntity
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.filled.Message
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -73,14 +77,22 @@ fun HomeScreen(
     isDark: Boolean,
     viewModel: ContactViewModel = viewModel(factory = ContactViewModelFactory(LocalContext.current))
 ) {
-    val contacts by viewModel.contacts.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     
     HomeScreenContent(
         isDark = isDark,
-        contacts = contacts,
-        onChatClick = { chatName -> 
+        uiState = uiState,
+        onSearchQueryChange = viewModel::onSearchQueryChange,
+        onChatClick = { chatName, imageUri, messageId -> 
             viewModel.clearUnreadCount(chatName)
-            navController.navigate("chat/$chatName") 
+            val encodedName = java.net.URLEncoder.encode(chatName, "UTF-8")
+            val baseRoute = "chat/$encodedName"
+            val params = mutableListOf<String>()
+            if (imageUri != null) params.add("imageUri=$imageUri")
+            if (messageId != null) params.add("messageId=$messageId")
+            
+            val route = if (params.isNotEmpty()) "$baseRoute?${params.joinToString("&")}" else baseRoute
+            navController.navigate(route)
         },
         onAddContact = { name -> viewModel.addContact(name) },
         onDeleteContact = { contact -> viewModel.deleteContact(contact) }
@@ -90,23 +102,24 @@ fun HomeScreen(
 @Composable
 fun HomeScreenContent(
     isDark: Boolean,
-    contacts: List<ContactEntity>,
-    onChatClick: (String) -> Unit,
+    uiState: HomeUiState,
+    onSearchQueryChange: (String) -> Unit,
+    onChatClick: (String, String?, String?) -> Unit,
     onAddContact: (String) -> Unit,
     onDeleteContact: (ContactEntity) -> Unit
 ) {
-    // SAI Colors (Matching MainActivity)
-    val saiBackground = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F6)
-    val saiSurface = if (isDark) Color(0xFF2C2C2E) else Color.White
-    val saiTextPrimary = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val saiTextSecondary = if (isDark) Color.Gray else Color.Gray
+    // SAI Colors (Dynamic)
+    val saiBackground = MaterialTheme.colorScheme.background
+    val saiSurface = MaterialTheme.colorScheme.surfaceContainerHigh
+    val saiTextPrimary = MaterialTheme.colorScheme.onSurface
+    val saiTextSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
     // UI States
     var contactToDelete by remember { mutableStateOf<ContactEntity?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
+    // searchQuery moved to ViewModel
     
     // Camera States
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -126,7 +139,7 @@ fun HomeScreenContent(
             text = {
                 Box(modifier = Modifier.height(300.dp)) {
                     LazyColumn {
-                        items(contacts) { contact ->
+                        items(uiState.contacts) { contact ->
                              Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -134,14 +147,7 @@ fun HomeScreenContent(
                                         showShareDialog = false
                                         // Navigate to chat with imageUri
                                         val encodedUri = java.net.URLEncoder.encode(capturedImageUri.toString(), "UTF-8")
-                                        onChatClick("${contact.name}?imageUri=$encodedUri")
-                                        /* 
-                                           Note: onChatClick in HomeScreen expects just 'chatName'. 
-                                           But our updated HomeScreen lambda (lines 66-69) does:
-                                           navController.navigate("chat/$chatName")
-                                           So we need to pass a string that results in "chat/Name?imageUri=..."
-                                           If we pass "Name?imageUri=...", then "chat/Name?imageUri=..." works!
-                                        */
+                                        onChatClick(contact.name, encodedUri, null)
                                     }
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -221,19 +227,17 @@ fun HomeScreenContent(
     }
 
     val view = LocalView.current
+    val darkTheme = isSystemInDarkTheme()
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as android.app.Activity).window
-            window.statusBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
+            window.statusBarColor = Color.Transparent.toArgb() // Or MaterialTheme.colorScheme.background.toArgb() if needed
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
     
-    // Filtered Contacts Logic
-    val filteredContacts = if (searchQuery.isBlank()) contacts else contacts.filter { 
-        it.name.contains(searchQuery, ignoreCase = true) || 
-        it.lastMessage?.contains(searchQuery, ignoreCase = true) == true
-    }
+    // Locked Search Logic
+    // val filteredContacts removed
 
     Surface(
         color = saiBackground,
@@ -294,6 +298,18 @@ fun HomeScreenContent(
                                         onClick = { showMenu = false; android.widget.Toast.makeText(context, "Settings clicked", android.widget.Toast.LENGTH_SHORT).show() }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Free Up Space") }, // Clear Cache Logic
+                                        onClick = { 
+                                            showMenu = false
+                                            try {
+                                                context.cacheDir.deleteRecursively()
+                                                android.widget.Toast.makeText(context, "Cache Cleared! 🧹", android.widget.Toast.LENGTH_SHORT).show()
+                                            } catch (e: Exception) {
+                                                android.widget.Toast.makeText(context, "Failed to clear cache", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Logout") },
                                         onClick = { 
                                             showMenu = false
@@ -309,8 +325,8 @@ fun HomeScreenContent(
                     // Search Bar (Animated Visibility)
                     AnimatedVisibility(visible = showSearch, enter = expandVertically(), exit = shrinkVertically()) {
                         OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            value = uiState.query,
+                            onValueChange = onSearchQueryChange,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -331,28 +347,55 @@ fun HomeScreenContent(
                 LazyColumn(
                     contentPadding = PaddingValues(bottom = 100.dp)
                 ) {
-                    items(filteredContacts) { contact -> // Use filtered list
-                        ChatListItem(
-                            contact = contact, 
-                            textColor = saiTextPrimary, 
-                            secondaryColor = saiTextSecondary, 
-                            surfaceColor = saiSurface,
-                            searchQuery = searchQuery,
-                            onClick = { onChatClick(contact.name) },
-                            onLongClick = { contactToDelete = contact }
-                        )
-                        Divider(
-                            modifier = Modifier.padding(start = 76.dp),
-                            thickness = 0.5.dp,
-                            color = if (isDark) Color.DarkGray else Color.LightGray
-                        )
+                    if (uiState.query.isNotBlank() && uiState.contacts.isEmpty() && uiState.messageResults.isEmpty()) {
+                        item {
+                            EmptySearchState(query = uiState.query)
+                        }
+                    } else {
+                        // Contacts Section
+                        if (uiState.contacts.isNotEmpty()) {
+                            if (uiState.query.isNotBlank()) item { SectionHeader("Contacts") }
+                            items(uiState.contacts) { contact ->
+                                ChatListItem(
+                                    contact = contact, 
+                                    textColor = saiTextPrimary, 
+                                    secondaryColor = saiTextSecondary, 
+                                    surfaceColor = saiSurface,
+                                    searchQuery = uiState.query,
+                                    onClick = { onChatClick(contact.name, null, null) },
+                                    onLongClick = { contactToDelete = contact }
+                                )
+                                Divider(
+                                    modifier = Modifier.padding(start = 76.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                        
+                        // Messages Section
+                        if (uiState.messageResults.isNotEmpty()) {
+                            item { SectionHeader("Messages") }
+                            items(uiState.messageResults) { msg -> 
+                                MessageResultItem(
+                                    message = msg,
+                                    searchQuery = uiState.query,
+                                    onClick = { onChatClick(msg.chatId, null, msg.id) } // Navigate to chat
+                                )
+                                Divider(
+                                    modifier = Modifier.padding(start = 76.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
                     }
                 }
             }
             
             // Floating Action Button (Styled like Send Button)
-            val fabColor = MaterialTheme.colorScheme.primaryContainer
-            val fabContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            val fabColor = MaterialTheme.colorScheme.tertiaryContainer // Distinct color
+            val fabContentColor = MaterialTheme.colorScheme.onTertiaryContainer
             
             Surface(
                 shape = CircleShape,
@@ -364,7 +407,6 @@ fun HomeScreenContent(
                     .align(Alignment.BottomEnd)
                     .padding(end = 28.dp, bottom = 28.dp) // Changed to 28dp to match Chat Screen (24+4)
                     .size(56.dp)
-                    .shadow(16.dp, CircleShape, spotColor = fabColor, ambientColor = fabColor, clip = false)
             ) {
                 IconButton(onClick = { showAddDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "New Chat", tint = fabContentColor)
@@ -453,7 +495,7 @@ fun ChatListItem(
                 shape = CircleShape,
                 color = surfaceColor, // Placeholder color
                 modifier = Modifier.size(56.dp),
-                shadowElevation = 1.dp
+                shadowElevation = 0.dp
             ) {
                  if (contact.profileImageUri != null) {
                     AsyncImage(
@@ -478,12 +520,12 @@ fun ChatListItem(
             if (contact.isOnline) {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFF4CAF50),
+                    color = MaterialTheme.colorScheme.tertiary, // Dynamic distinct color
                     modifier = Modifier
                         .size(14.dp)
                         .align(Alignment.TopEnd)
-                        .offset(x = 2.dp, y = (-2).dp)
-                        .border(2.dp, surfaceColor, CircleShape)
+                        .offset(x = 0.dp, y = 0.dp) // Centered on the stroke (0.dp places corner at corner)
+                        .border(2.dp, MaterialTheme.colorScheme.background, CircleShape) // Stroke matches background for cutout effect
                 ) {}
             }
         }
@@ -538,5 +580,75 @@ fun ChatListItem(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+    )
+}
+
+@Composable
+fun EmptySearchState(query: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(64.dp).alpha(0.5f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "No results for \"$query\"",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.outline
+        )
+    }
+}
+
+@Composable
+fun MessageResultItem(
+    message: MessageEntity,
+    searchQuery: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+         Surface(
+             shape = CircleShape,
+             color = MaterialTheme.colorScheme.surfaceContainerHigh,
+             modifier = Modifier.size(48.dp)
+         ) {
+             Box(contentAlignment = Alignment.Center) {
+                 Icon(Icons.Default.Message, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+             }
+         }
+         Spacer(modifier = Modifier.width(16.dp))
+         Column(modifier = Modifier.weight(1f)) {
+             Text(
+                 text = if(message.isFromMe) "You • ${message.chatId}" else message.chatId, 
+                 style = MaterialTheme.typography.labelMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant
+             )
+             Text(
+                 text = highlightText(message.text ?: "Photo", searchQuery),
+                 style = MaterialTheme.typography.bodyMedium,
+                 color = MaterialTheme.colorScheme.onSurface,
+                 maxLines = 2
+             )
+         }
     }
 }

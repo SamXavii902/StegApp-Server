@@ -1,0 +1,9 @@
+Found fun AppNavigation at line 159, Level: 0
+Found fun ChatScreen at line 185, Level: 0
+Found fun FullScreenImageOverlay at line 348, Level: 0
+Found fun ChatScreenContent at line 414, Level: 0
+Found fun MessageBubble at line 805, Level: 1
+Found fun ChatScreenPreview at line 916, Level: 1
+Found fun Modifier.bounceClick at line 954, Level: 1
+Found fun Modifier.bubbleEnterAnimation at line 989, Level: 1
+Success: Braces are balanced.

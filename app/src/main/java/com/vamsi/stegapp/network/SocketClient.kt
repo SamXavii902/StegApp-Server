@@ -22,6 +22,9 @@ object SocketClient {
     
     private val _userStatusUpdates = MutableSharedFlow<JSONObject>(replay = 10, extraBufferCapacity = 10)
     val userStatusUpdates = _userStatusUpdates.asSharedFlow()
+
+    private val _messageStatusUpdates = MutableSharedFlow<JSONObject>(replay = 10, extraBufferCapacity = 10)
+    val messageStatusUpdates = _messageStatusUpdates.asSharedFlow()
     
     // Connection Status
     private val _isConnected = MutableStateFlow(false)
@@ -92,6 +95,15 @@ object SocketClient {
                 }
             }
 
+            // Listen for message status updates (delivered/read)
+            socket?.on("message_status") { args ->
+                if (args.isNotEmpty()) {
+                    val data = args[0] as JSONObject
+                    Log.d(TAG, "Message Status Update: $data")
+                    _messageStatusUpdates.tryEmit(data)
+                }
+            }
+
             socket?.connect()
         } catch (e: Exception) {
             Log.e(TAG, "Socket Connection Error", e)
@@ -103,7 +115,7 @@ object SocketClient {
         socket?.off()
     }
 
-    fun emitMessage(id: String, text: String?, imageUrl: String?, sender: String, recipient: String, camouflageText: String? = null, timestamp: Long = System.currentTimeMillis()) {
+    fun emitMessage(id: String, text: String?, imageUrl: String?, sender: String, recipient: String, camouflageText: String? = null, timestamp: Long = System.currentTimeMillis(), replyToId: String? = null) {
         val json = JSONObject().apply {
             put("id", id)
             put("text", text)
@@ -112,6 +124,7 @@ object SocketClient {
             put("recipient", recipient)
             put("camouflageText", camouflageText)
             put("timestamp", timestamp)
+            put("replyToId", replyToId)
         }
         socket?.emit("send_message", json)
     }
@@ -132,5 +145,14 @@ object SocketClient {
         }
         Log.d(TAG, "📡 EMITTING STATUS: username=$username, status=$status")
         socket?.emit("user_status", json)
+    }
+    
+    fun emitMessageRead(messageId: String, sender: String) {
+        val json = JSONObject().apply {
+            put("messageId", messageId)
+            put("reader", sender)
+        }
+        Log.d(TAG, "👁️ EMITTING READ RECEIPT: messageId=$messageId")
+        socket?.emit("message_read", json)
     }
 }

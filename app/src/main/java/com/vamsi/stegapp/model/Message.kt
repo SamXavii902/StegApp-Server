@@ -10,5 +10,7 @@ data class Message(
     val isFromMe: Boolean,
     val isStego: Boolean = false,
     val status: Int = 0, // 0: Normal/Sent, 1: Sending/Uploading, 2: Remote/Pending Download, 3: Downloading, 4: Downloaded
-    val timestamp: Long = System.currentTimeMillis()
+    val deliveryStatus: Int = 0, // 0: Pending, 1: Sent, 2: Delivered, 3: Read
+    val timestamp: Long = System.currentTimeMillis(),
+    val replyToId: String? = null // Reply Support
 )

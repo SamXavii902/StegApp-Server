@@ -8,20 +8,62 @@ import com.vamsi.stegapp.data.db.ContactEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import com.vamsi.stegapp.data.db.MessageEntity
 import java.util.UUID
+
+data class HomeUiState(
+    val contacts: List<ContactEntity> = emptyList(),
+    val messageResults: List<MessageEntity> = emptyList(),
+    val query: String = ""
+)
 
 class ContactViewModel(private val context: Context) : ViewModel() {
 
     private val dao = AppDatabase.getDatabase(context).contactDao()
     private val messageDao = AppDatabase.getDatabase(context).messageDao()
 
-    val contacts = dao.getAllContacts()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _searchQuery = MutableStateFlow("")
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val _searchResults = _searchQuery
+        .debounce(300)
+        .flatMapLatest { query ->
+            if (query.isBlank()) {
+                kotlinx.coroutines.flow.flowOf(emptyList<MessageEntity>())
+            } else {
+                messageDao.searchMessages(query)
+            }
+        }
+
+    val uiState = combine(
+        dao.getAllContacts(),
+        _searchQuery,
+        _searchResults
+    ) { contacts, query, messages ->
+        if (query.isBlank()) {
+             HomeUiState(contacts = contacts, query = query, messageResults = emptyList())
+        } else {
+             val filteredContacts = contacts.filter { it.name.contains(query, ignoreCase = true) }
+             HomeUiState(
+                 contacts = filteredContacts, 
+                 messageResults = messages, 
+                 query = query
+             )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
     init {
         viewModelScope.launch {
-            // Socket connection moved to SocketService
-            // Incoming message handling moved to SocketService
+            // Initial setup if needed
         }
     }
 

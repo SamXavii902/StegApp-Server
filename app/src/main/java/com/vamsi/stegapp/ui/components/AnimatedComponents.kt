@@ -110,7 +110,7 @@ fun PasswordBottomSheet(
         modifier = Modifier.fillMaxWidth().imePadding(), // Pushes sheet up when keyboard opens
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 16.dp
+        shadowElevation = 0.dp
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(

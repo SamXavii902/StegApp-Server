@@ -28,6 +28,7 @@
             android:exported="true"
             android:label="@string/app_name"
             android:windowSoftInputMode="stateAlwaysHidden|adjustNothing"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|keyboardHidden|keyboard"
             android:theme="@style/Theme.StegAppMaterialUI">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

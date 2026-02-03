@@ -24,11 +24,18 @@ import kotlinx.coroutines.flow.stateIn
 import com.vamsi.stegapp.network.SocketClient
 import com.vamsi.stegapp.data.db.ContactDao
 import com.vamsi.stegapp.utils.UserPrefs
+import kotlinx.coroutines.flow.update
+import com.vamsi.stegapp.network.ProgressRequestBody
 
 class ChatViewModel(context: Context, private val chatId: String) : ViewModel() {
 
     private val repository = StegoRepository(context)
     private val appContext = context.applicationContext
+
+    // DAOs (Initialize BEFORE init block)
+    private val dao = AppDatabase.getDatabase(context).messageDao()
+    private val contactDao = AppDatabase.getDatabase(context).contactDao()
+
 
     // Shared Secret (ECDH)
     private var derivedSecretKey: String? = null
@@ -40,6 +47,15 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
         viewModelScope.launch {
             try {
                 contactDao.resetUnreadCount(chatId)
+                
+                // Mark all received messages as read
+                val receivedMessages = dao.getMessagesForChat(chatId).map { entities ->
+                    entities.filter { !it.isFromMe && it.deliveryStatus < 3 }
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList()).value
+                
+                receivedMessages.forEach { msg ->
+                    SocketClient.emitMessageRead(msg.id, username)
+                }
                 
                 // Fetch Public Key & Derive Secret
                 val response = NetworkModule.api.fetchKey(chatId)
@@ -58,11 +74,38 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                 _error.value = "Connection Error during Key Exchange"
             }
         }
+        
+        // Auto-Retry Pending Text Messages on Reconnect
+        viewModelScope.launch {
+            SocketClient.isConnected.collect { connected ->
+                if (connected) {
+                    try {
+                        val pendingMessages = dao.getPendingTextMessages(chatId)
+                        if (pendingMessages.isNotEmpty()) {
+                             val username = UserPrefs.getUsername(appContext) ?: "Anonymous"
+                             pendingMessages.forEach { msg ->
+                                SocketClient.emitMessage(
+                                    id = msg.id,
+                                    text = msg.text,
+                                    imageUrl = null, // Text messages only
+                                    sender = username,
+                                    recipient = chatId,
+                                    camouflageText = null, // Simplified for retry
+                                    timestamp = msg.timestamp,
+                                    replyToId = msg.replyToId
+                                )
+                                // Update to Sent (0)
+                                dao.updateStatus(msg.id, 0)
+                             }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
     }
     
-    private val dao = AppDatabase.getDatabase(context).messageDao()
-    private val contactDao = AppDatabase.getDatabase(context).contactDao()
-
     // Persistent Messages from DB
     val messages = dao.getMessagesForChat(chatId)
         .map { entities -> entities.map { it.toDomain() } }
@@ -79,13 +122,15 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
 
     val isConnected = SocketClient.isConnected
     
-    // Contact's online status
     val contactOnlineStatus = contactDao.getContactFlow(chatId)
         .map { contact -> contact?.isOnline ?: false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    private val _uploadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val uploadProgress = _uploadProgress.asStateFlow()
 
-    fun sendMessage(text: String, imageUri: Uri?, camouflageText: String? = null) {
+
+    fun sendMessage(text: String, imageUri: Uri?, camouflageText: String? = null, replyToId: String? = null) {
         if (derivedSecretKey == null) {
             _error.value = "Secure connection not established. Please re-open chat."
             return
@@ -121,10 +166,11 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                         isFromMe = true,
                         isStego = true,
                         status = 1, // SENDING
-                        timestamp = timestamp
+                        timestamp = timestamp,
+                        replyToId = replyToId
                     )
                     dao.insertMessage(newMessage.toEntity())
-                    contactDao.updateLastMessage(chatId, "Sent a hidden message", timestamp, 0)
+                    contactDao.updateLastMessage(chatId, "Sent a photo", timestamp, 0)
                     
                     // Upload
                     uploadStegoImage(stegoPath, newMessage, camouflageText)
@@ -134,6 +180,10 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
             } else {
                 // --- TEXT-ONLY (STEALTH) FLOW ---
                 
+                // Status 1 = SENDING (Clock). Status 0 = SENT (Tick).
+                val isConnected = SocketClient.isConnected.value
+                val initialStatus = if (isConnected) 0 else 1
+                
                 val newMessage = Message(
                     id = newId,
                     chatId = chatId,
@@ -141,23 +191,27 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                     imageUri = null,
                     isFromMe = true,
                     isStego = false, // Pure text
-                    status = 0, // SENT (No upload needed)
-                    timestamp = timestamp
+                    status = initialStatus, 
+                    deliveryStatus = 1, // Sent (but if offline, it's pending send)
+                    timestamp = timestamp,
+                    replyToId = replyToId
                 )
                 dao.insertMessage(newMessage.toEntity())
                 
                 contactDao.updateLastMessage(chatId, text, timestamp, 0)
 
-                // Emit
-                SocketClient.emitMessage(
-                    id = newId,
-                    text = text,
-                    imageUrl = null,
-                    sender = username,
-                    recipient = chatId,
-                    camouflageText = camouflageText,
-                    timestamp = timestamp
-                )
+                if (isConnected) {
+                    SocketClient.emitMessage(
+                        id = newId,
+                        text = text,
+                        imageUrl = null,
+                        sender = username,
+                        recipient = chatId,
+                        camouflageText = camouflageText,
+                        timestamp = timestamp,
+                        replyToId = replyToId
+                    )
+                }
             }
         }
     }
@@ -197,6 +251,39 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                  contactDao.updateLastMessage(chatId, secretText, newMessage.timestamp, 0) 
             }.onFailure {
                  _error.value = "Extraction failed: ${it.message}"
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun revealMessage(message: Message) {
+        if (derivedSecretKey == null) {
+            _error.value = "Secure connection not established."
+            return
+        }
+        val secretKey = derivedSecretKey!!
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            
+            // If local path exists, use it. Otherwise need to handle (but usually we have it if it's in the bubble)
+            val imagePath = message.imageUri.toString() // Assuming it's already a path or we might need copyUriToTempFile if it's content://
+            
+            // We might need to handle content:// vs file://. 
+            // In downloadMedia we save absolute path. 
+            // extractMessage expects a path string. 
+            // If it's a content URI, we need a temp file.
+            val finalPath = if (imagePath.startsWith("content://")) copyUriToTempFile(message.imageUri!!) ?: imagePath else imagePath
+
+            val result = repository.extractMessage(finalPath, secretKey)
+            
+            result.onSuccess { secretText ->
+                // Update EXISTING message
+                val updatedEntity = message.toEntity().copy(text = secretText)
+                dao.insertMessage(updatedEntity)
+                contactDao.updateLastMessage(chatId, secretText, message.timestamp, 0)
+            }.onFailure {
+                _error.value = "Reveal failed: ${it.message}"
             }
             _isLoading.value = false
         }
@@ -257,7 +344,9 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
         viewModelScope.launch {
             try {
                 val file = File(path)
-                val requestFile = file.asRequestBody("image/png".toMediaTypeOrNull())
+                val requestFile = ProgressRequestBody(file, "image/png".toMediaTypeOrNull()) { progress ->
+                     _uploadProgress.update { it + (message.id to progress) }
+                }
                 val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
                 
                 val response = NetworkModule.api.uploadImage(body)
@@ -266,7 +355,7 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                     val username = UserPrefs.getUsername(appContext) ?: "Anonymous"
                     
                     // Update Status to SENT (0)
-                    dao.insertMessage(message.toEntity().copy(status = 0))
+                    dao.insertMessage(message.toEntity().copy(status = 0, deliveryStatus = 1))
 
                     SocketClient.emitMessage(
                         id = message.id,
@@ -277,12 +366,27 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                         camouflageText = camouflageText,
                         timestamp = message.timestamp
                     )
-                    // _success.value = "Sent!" // Toast removed as requested
+                    _uploadProgress.update { it - message.id }
                 } else {
-                    _error.value = "Upload failed: ${response.code()}"
-                    // Maybe mark as failed in DB?
+                    val errorBody = response.errorBody()?.string()
+                    _error.value = if (!errorBody.isNullOrBlank()) {
+                         try {
+                              // Try to parse JSON if possible, or just truncate
+                              if (errorBody.contains("\"detail\"")) {
+                                   org.json.JSONObject(errorBody).getString("detail")
+                              } else {
+                                   "Upload Failed: ${response.code()} - ${errorBody.take(100)}"
+                              }
+                         } catch (e: Exception) {
+                              "Upload Failed: ${response.code()} - $errorBody"
+                         }
+                    } else {
+                         "Upload Failed: ${response.code()}"
+                    }
+                    _uploadProgress.update { it - message.id }
                 }
             } catch (e: Exception) {
+                _uploadProgress.update { it - message.id }
                 _error.value = "Network Error: ${e.message}"
             }
         }
@@ -322,13 +426,36 @@ class ChatViewModel(context: Context, private val chatId: String) : ViewModel() 
                 val displayMsg = if (!lastMsg.text.isNullOrEmpty()) {
                     lastMsg.text
                 } else if (lastMsg.isStego) {
-                    "Sent a hidden message"
+                    "Sent a photo"
                 } else {
                     "Sent an image"
                 }
                 contactDao.updateLastMessage(chatId, displayMsg!!, lastMsg.timestamp, 0)
             } else {
                 // No messages left: Set default text
+                contactDao.updateLastMessage(chatId, "Start a conversation", 0L, 0)
+            }
+        }
+    }
+
+    fun deleteMessages(messages: List<Message>, deleteForEveryone: Boolean = false) {
+        viewModelScope.launch {
+            if (deleteForEveryone) {
+                messages.forEach { SocketClient.emitDeleteMessage(it.id, chatId) }
+            }
+            dao.deleteMessages(messages.map { it.toEntity() })
+            
+            val lastMsg = dao.getLastMessage(chatId)
+            if (lastMsg != null) {
+                val displayMsg = if (!lastMsg.text.isNullOrEmpty()) {
+                    lastMsg.text
+                } else if (lastMsg.isStego) {
+                    "Sent a photo"
+                } else {
+                    "Sent an image"
+                }
+                contactDao.updateLastMessage(chatId, displayMsg!!, lastMsg.timestamp, 0)
+            } else {
                 contactDao.updateLastMessage(chatId, "Start a conversation", 0L, 0)
             }
         }
@@ -344,7 +471,9 @@ private fun MessageEntity.toDomain(): Message {
         isFromMe = isFromMe,
         isStego = isStego,
         status = status,
-        timestamp = timestamp
+        deliveryStatus = deliveryStatus,
+        timestamp = timestamp,
+        replyToId = replyToId
     )
 }
 
@@ -357,6 +486,8 @@ private fun Message.toEntity(): MessageEntity {
         isFromMe = isFromMe,
         isStego = isStego,
         status = status,
-        timestamp = timestamp
+        deliveryStatus = deliveryStatus,
+        timestamp = timestamp,
+        replyToId = replyToId
     )
 }
