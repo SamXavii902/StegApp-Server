@@ -704,12 +704,10 @@ fun ChatScreenContent(
                     .height(with(LocalDensity.current) { inputHeightPx.toDp() + bottomBarMove + 60.dp }) // Height of input + buffer
                     .background(
                         Brush.verticalGradient(
-                            stops = arrayOf(
-                                0.0f to Color.Transparent,
-                                0.3f to scrimColor.copy(alpha = if (isDark) 0.6f else 0.3f),
-                                0.6f to scrimColor.copy(alpha = if (isDark) 0.85f else 0.6f),
-                                1.0f to scrimColor
-                            )
+                            0.0f to Color.Transparent,
+                            0.3f to scrimColor.copy(alpha = if (isDark) 0.6f else 0.3f),
+                            0.6f to scrimColor.copy(alpha = if (isDark) 0.85f else 0.6f),
+                            1.0f to scrimColor
                         )
                     )
                     .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
