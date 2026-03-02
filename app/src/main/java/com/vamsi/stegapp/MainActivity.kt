@@ -697,11 +697,13 @@ fun ChatScreenContent(
             
             // 🌫️ Refined Gradient Scrim for better visual appeal
             val scrimColor = MaterialTheme.colorScheme.background
+            val scrimHeight = with(LocalDensity.current) { inputHeightPx.toDp() + 110.dp } // Fixed total height to cover input + bottom bar area
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(with(LocalDensity.current) { inputHeightPx.toDp() + bottomBarMove + 60.dp }) // Height of input + buffer
+                    .height(scrimHeight)
+                    .offset(y = bottomBarMove) // Translate down when bottom bar hides
                     .background(
                         Brush.verticalGradient(
                             0.0f to Color.Transparent,
