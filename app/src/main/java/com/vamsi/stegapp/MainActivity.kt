@@ -946,7 +946,7 @@ fun MessageBubble(
                              
                              LaunchedEffect(message.imageUri) {
                                  if (message.imageUri != null) {
-                                     kotlinx.coroutines.Dispatchers.IO.invoke {
+                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                          fileSize = ImageUtils.getFileSize(context, message.imageUri)
                                      }
                                  }
