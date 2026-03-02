@@ -1,0 +1,138 @@
+\documentclass[letterpaper,10.5pt]{article}
+
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\input{glyphtounicode}
+
+% Page + spacing control
+\linespread{0.98}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.0in}
+\addtolength{\topmargin}{-0.65in}
+\addtolength{\textheight}{1.32in}
+
+\raggedright
+\raggedbottom
+\setlength{\tabcolsep}{0in}
+\pdfgentounicode=1
+
+% Section formatting (clean)
+\titleformat{\section}
+  {\vspace{-2pt}\scshape\raggedright\large\bfseries}
+  {}{0em}{}[\titlerule \vspace{-3pt}]
+
+% Commands
+\newcommand{\resumeItem}[1]{\item\small{#1}}
+\newcommand{\resumeSubheading}[4]{
+\item
+\begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+\textbf{#1} & \textbf{\small #2} \\
+\textit{\small #3} & \textit{\small #4} \\
+\end{tabular*}
+}
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0in, label={}, itemsep=4pt]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.25in, itemsep=2pt]}
+\newcommand{\resumeItemListEnd}{\end{itemize}}
+
+%-------------------------------------------
+\begin{document}
+
+% HEADER
+\begin{center}
+{\Huge \scshape Uppu Vamsi}\\
+DOB: 14 Oct 2003 \quad Vivek Nagar, North 24 Paraganas, West Bengal\\
+\small
+\faPhone\ (+91) 8274995480 \quad
+\href{mailto:vamsiuppu4@gmail.com}{\faEnvelope\ vamsiuppu4@gmail.com} \quad
+\href{https://github.com/SamXavii902}{\faGithub\ github.com/SamXavii902}
+\end{center}
+
+% EDUCATION
+\section{Education}
+\resumeSubHeadingListStart
+\resumeSubheading
+{National Institute of Technology, Rourkela}{Aug 2025 -- Present}
+{M.Tech in Signal and Image Processing}{Rourkela, Odisha}
+\resumeSubheading
+{National Institute of Technology, Srinagar}{Jun 2021 -- Jul 2025}
+{B.Tech in Information Technology (CGPA: 6.742)}{Srinagar, J\&K}
+\resumeSubheading
+{Sri Chaitanya Jr. College}{May 2021}
+{BIEAP (PCM) -- 90.5\%}{Vishakhapatnam, AP}
+\resumeSubheading
+{Vijnana Vihara Residential School}{May 2019}
+{CBSE AISSE -- 93\%}{Vishakhapatnam, AP}
+\resumeSubHeadingListEnd
+
+% COURSEWORK
+\section{Relevant Coursework}
+\begin{multicols}{2}
+\begin{itemize}[itemsep=1pt]
+\item Data Structures and Algorithms
+\item Design and Analysis of Algorithms
+\item Database Management Systems
+\item Operating Systems
+\item Computer Networks
+\item Object Oriented Programming
+\end{itemize}
+\end{multicols}
+
+% PROJECTS
+\section{Projects}
+\resumeSubHeadingListStart
+
+\resumeSubheading
+{Secure Steganography-Based Messaging Platform}{Jan 2026 -- Present}
+{Kotlin, Jetpack Compose, Python (Chaquopy), FastAPI, MongoDB, Socket.IO}{}
+\resumeItemListStart
+\resumeItem{Engineered a real-time secure messaging app using a \textbf{hybrid Native/Python architecture}, integrating \textbf{Chaquopy} to execute complex PVD steganography and cryptography scripts directly within the Android runtime.}
+\resumeItem{Implemented \textbf{End-to-End Encryption} using \textbf{ECDH key exchange} and \textbf{ChaCha20-Poly1305}, creating and securing shared secrets via the hardware-backed \textbf{Android KeyStore}.}
+\resumeItem{Designed a low-latency bi-directional event system with \textbf{Socket.IO} to handle instant message delivery, offline synchronization, and reliable read receipts.}
+\resumeItem{Developed a scalable \textbf{FastAPI} backend with \textbf{MongoDB} for user/metadata management and integrated \textbf{Cloudinary} for lossless image storage services.}
+\resumeItem{Optimized payload efficiency using \textbf{LZ4 compression} and reduced statistical detectability via randomized **Magic Matrix** embedding.}
+\resumeItemListEnd
+
+\resumeSubheading
+{Advanced Hybrid Steganography \& Cryptography Suite}{Jan 2025 -- Apr 2025}
+{Python, OpenCV, NumPy, Cryptography}{}
+\resumeItemListStart
+\resumeItem{Developed the core steganographic engine combining \textbf{Pixel Value Differencing (PVD)} and randomized \textbf{Magic Matrix} techniques for high-capacity, invisible data hiding.}
+\resumeItem{Conducted automated security analysis using Entropy, Histogram, and PSNR/SSIM metrics to rigorously validate image quality and imperceptibility.}
+\resumeItemListEnd
+
+\resumeSubheading
+{Additional Technical Projects}{}{}{}
+\resumeItemListStart
+\resumeItem{\textbf{Touchless Interface}: Real-time gesture control system for HCI using OpenCV and MediaPipe hand tracking.}
+\resumeItem{\textbf{Robot Tracker}: Dynamic object tracking system implementing hybrid CSRT + Extended Kalman Filter.}
+\resumeItem{\textbf{IntelliPass-Hybrid-AI}: Password strength analyzer using Multi-Layer Perceptrons (MLP) and fuzzy logic.}
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+% SKILLS
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.25in, itemsep=2pt]
+\item \textbf{Languages}: Python, Kotlin, C, MATLAB, SQL, HTML/CSS
+\item \textbf{Core Domains}: Image Processing, Computer Vision, Applied Cryptography, Android Development, HCI
+\item \textbf{Frameworks \& Tools}: Jetpack Compose, FastAPI, OpenCV, MediaPipe, Git, Docker, Linux, Figma
+\end{itemize}
+
+\end{document}

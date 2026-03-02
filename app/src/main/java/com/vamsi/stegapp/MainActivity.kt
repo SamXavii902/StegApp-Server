@@ -695,7 +695,8 @@ fun ChatScreenContent(
             
             LaunchedEffect(replyingTo) { if (replyingTo != null) { kotlinx.coroutines.delay(100); focusRequester.requestFocus() } }
             
-            // 🌫️ "Gradual Blur" Scrim - Fades out content behind the bottom bar
+            // 🌫️ Refined Gradient Scrim for better visual appeal
+            val scrimColor = MaterialTheme.colorScheme.background
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -703,12 +704,12 @@ fun ChatScreenContent(
                     .height(with(LocalDensity.current) { inputHeightPx.toDp() + bottomBarMove + 60.dp }) // Height of input + buffer
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.background.copy(alpha = if (isDark) 0.8f else 0.4f),
-                                MaterialTheme.colorScheme.background
-                            ),
-                            startY = 0f
+                            stops = arrayOf(
+                                0.0f to Color.Transparent,
+                                0.3f to scrimColor.copy(alpha = if (isDark) 0.6f else 0.3f),
+                                0.6f to scrimColor.copy(alpha = if (isDark) 0.85f else 0.6f),
+                                1.0f to scrimColor
+                            )
                         )
                     )
                     .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
@@ -943,8 +944,14 @@ fun MessageBubble(
                         AsyncImage(model = message.imageUri, contentDescription = null, modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop) // Removed clickable from here
                         if (message.status == 1) {
                              val context = LocalContext.current
-                             val fileSize = remember(message.imageUri) {
-                                 if (message.imageUri != null) ImageUtils.getFileSize(context, message.imageUri) else 0L
+                             var fileSize by remember(message.imageUri) { mutableStateOf(0L) }
+                             
+                             LaunchedEffect(message.imageUri) {
+                                 if (message.imageUri != null) {
+                                     kotlinx.coroutines.Dispatchers.IO.invoke {
+                                         fileSize = ImageUtils.getFileSize(context, message.imageUri)
+                                     }
+                                 }
                              }
                              
                              // Upload Pill (Bottom Start)
