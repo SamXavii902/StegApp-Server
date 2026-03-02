@@ -706,9 +706,10 @@ fun ChatScreenContent(
                     .offset(y = bottomBarMove) // Translate down when bottom bar hides
                     .background(
                         Brush.verticalGradient(
-                            0.0f to Color.Transparent,
-                            0.3f to scrimColor.copy(alpha = if (isDark) 0.6f else 0.3f),
-                            0.6f to scrimColor.copy(alpha = if (isDark) 0.85f else 0.6f),
+                            0.0f to scrimColor.copy(alpha = 0f),
+                            0.3f to scrimColor.copy(alpha = 0.2f),
+                            0.6f to scrimColor.copy(alpha = 0.6f),
+                            0.8f to scrimColor.copy(alpha = 0.9f),
                             1.0f to scrimColor
                         )
                     )
