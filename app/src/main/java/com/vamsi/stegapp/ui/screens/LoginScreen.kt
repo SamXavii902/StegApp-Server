@@ -101,7 +101,7 @@ fun LoginScreen(navController: NavController, isDark: Boolean) {
                     onValueChange = { username = it },
                     label = { Text("Username") },
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.LightGray,
                         focusedTextColor = textColor,
