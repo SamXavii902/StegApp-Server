@@ -72,6 +72,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Brush
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -433,6 +438,7 @@ fun ChatScreenContent(
     onReveal: (Message) -> Unit, uploadProgress: Map<String, Float> = emptyMap(), highlightMessageId: String? = null
 ) {
     val listState = rememberLazyListState()
+    val hazeState = rememberHazeState()
     LaunchedEffect(highlightMessageId, messages) {
         if (highlightMessageId != null && messages.isNotEmpty()) {
             // LazyColumn uses reversed list, so we must search in reversed list relative order
@@ -614,7 +620,7 @@ fun ChatScreenContent(
 
             LazyColumn(
                 state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = chatListHorizontalPadding),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = chatListHorizontalPadding).hazeSource(state = hazeState),
                 reverseLayout = true,
                 verticalArrangement = Arrangement.spacedBy(3.dp), // Added 3dp spacing between bubbles
                 contentPadding = PaddingValues(
@@ -695,29 +701,7 @@ fun ChatScreenContent(
             
             LaunchedEffect(replyingTo) { if (replyingTo != null) { kotlinx.coroutines.delay(100); focusRequester.requestFocus() } }
             
-            // 🌫️ Responsive Gradient Scrim – tracks bottom bar state
-            val scrimColor = MaterialTheme.colorScheme.background
-            val inputDp = with(LocalDensity.current) { inputHeightPx.toDp() }
-            // Total solid area the scrim must cover (input + padding below it)
-            // plus a 40dp gradient fade-out zone above
-            val scrimTotalHeight = inputDp + animatedBottomPadding + 40.dp
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(scrimTotalHeight)
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = (0..49).map { i ->
-                                val t = i / 49f
-                                // Cubic ease-in curve: slow start, fast finish
-                                val alpha = (t * t * t).coerceIn(0f, 1f)
-                                t to scrimColor.copy(alpha = alpha)
-                            }.toTypedArray()
-                        )
-                    )
-                    .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
-            )
+            // 🌫️ Backdrop blur handled per-element via Haze – no gradient scrim needed
 
             AnimatedVisibility(
                 visible = currentMode == ChatMode.HIDE,
@@ -742,7 +726,16 @@ fun ChatScreenContent(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().padding(4.dp).graphicsLayer(clip = false).onSizeChanged { inputHeightPx = it.height }) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 25.dp
+                                noiseFactor = 0.1f
+                                tints = listOf(HazeTint(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)))
+                            }
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                             if (selectedImageUri != null) {
                                 Box(modifier = Modifier.padding(end = 8.dp)) {
@@ -763,7 +756,17 @@ fun ChatScreenContent(
                             }
                         }
                     }
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(56.dp).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f),
+                        modifier = Modifier.size(56.dp)
+                            .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 25.dp
+                                noiseFactor = 0.1f
+                                tints = listOf(HazeTint(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)))
+                            }
+                    ) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = { if(textInput.isNotBlank() || selectedImageUri != null) onSend() }), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.sendicon), contentDescription = "Send", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(26.dp)) }
                     }
                 }
@@ -789,10 +792,29 @@ fun ChatScreenContent(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(56.dp).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                        modifier = Modifier.size(56.dp)
+                            .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 25.dp
+                                noiseFactor = 0.1f
+                                tints = listOf(HazeTint(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)))
+                            }
+                    ) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
                     }
-                    Surface(modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                    Surface(
+                        modifier = Modifier.weight(1f).height(56.dp)
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 25.dp
+                                noiseFactor = 0.1f
+                                tints = listOf(HazeTint(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)))
+                            },
+                        shape = RoundedCornerShape(32.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)
+                    ) {
                         BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(4.dp)) {
                             val tabWidth = maxWidth / 2
                             val indicatorOffset by animateDpAsState(if (currentMode == ChatMode.HIDE) 0.dp else tabWidth, label = "indicator")
@@ -806,7 +828,20 @@ fun ChatScreenContent(
                         }
                     }
                     val envelopeGlowElevation by animateDpAsState(targetValue = if (isStealthMode) 16.dp else 0.dp, label = "envelope_glow")
-                    Surface(shape = CircleShape, color = if (isStealthMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer, shadowElevation = if (isStealthMode) 8.dp else 0.dp, modifier = Modifier.size(56.dp).shadow(elevation = envelopeGlowElevation, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.7f else 0f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.6f else 0f))) {
+                    val envelopeBgColor = if (isStealthMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)
+                    val envelopeTint = if (isStealthMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)
+                    Surface(
+                        shape = CircleShape,
+                        color = envelopeBgColor,
+                        shadowElevation = if (isStealthMode) 8.dp else 0.dp,
+                        modifier = Modifier.size(56.dp)
+                            .shadow(elevation = envelopeGlowElevation, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.7f else 0f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.6f else 0f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 25.dp
+                                noiseFactor = 0.1f
+                                tints = listOf(HazeTint(envelopeTint))
+                            }
+                    ) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick { onStealthModeChange(!isStealthMode) }, contentAlignment = Alignment.Center) { 
                             Crossfade(targetState = isStealthMode, label = "stealth_icon") { isEnabled ->
                                 Icon(

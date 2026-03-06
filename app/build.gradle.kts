@@ -98,6 +98,9 @@ dependencies {
 
     // Coil for images
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // Haze - iOS-style backdrop blur
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
     
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.6")
