@@ -544,11 +544,25 @@ fun ChatScreenContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(40.dp).bounceClick(onClick = onBack), contentAlignment = Alignment.Center) { Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        val maxIndex = maxOf(1, messages.size - 1)
                         val chatProgress by remember(messages.size) {
                             derivedStateOf {
                                 if (messages.size <= 1) 1f
-                                else 1f - (listState.firstVisibleItemIndex.toFloat() / maxIndex).coerceIn(0f, 1f)
+                                else {
+                                    val layoutInfo = listState.layoutInfo
+                                    val visibleItems = layoutInfo.visibleItemsInfo
+                                    if (visibleItems.isEmpty()) {
+                                        1f
+                                    } else {
+                                        val firstVisible = visibleItems.first()
+                                        // Approximate total scroll size based on average item height to get smooth continuous scroll
+                                        val totalItems = layoutInfo.totalItemsCount
+                                        val averageHeight = visibleItems.sumOf { it.size } / visibleItems.size.toFloat()
+                                        val currentScroll = (firstVisible.index * averageHeight) + firstVisible.offset.coerceAtLeast(0)
+                                        val totalScroll = (totalItems * averageHeight) - layoutInfo.viewportSize.height
+                                        if (totalScroll <= 0) 1f
+                                        else 1f - (currentScroll / totalScroll).coerceIn(0f, 1f)
+                                    }
+                                }
                             }
                         }
 
@@ -738,12 +752,12 @@ fun ChatScreenContent(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(scrimTotalHeight)
-                    // 1. Base fade: Doesn't go fully opaque (max 85% alpha), letting bubbles peek through
+                    // 1. Base fade: Fades up to solid background color at the very bottom to eliminate transparency
                     .background(
                         Brush.verticalGradient(
                             colorStops = (0..49).map { i ->
                                 val t = i / 49f
-                                val alpha = (t * t * t).coerceIn(0f, 1f) * 0.85f
+                                val alpha = (t * t * t).coerceIn(0f, 1f) * 1.0f // Reaches full opacity
                                 t to bgColor.copy(alpha = alpha)
                             }.toTypedArray()
                         )
