@@ -485,7 +485,7 @@ fun ChatScreenContent(
     val selectedMessages = remember { mutableStateListOf<Message>() }
     val isSelectionMode = selectedMessages.isNotEmpty()
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         if (showDeleteDialog && isSelectionMode) {
              // Dialog Overlay logic handled below
         }
@@ -513,8 +513,8 @@ fun ChatScreenContent(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.9f),
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                             Color.Transparent
                         )
                     )
