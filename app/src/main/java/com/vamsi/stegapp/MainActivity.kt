@@ -698,24 +698,24 @@ fun ChatScreenContent(
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(12.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth().shadow(elevation = 16.dp, shape = RoundedCornerShape(12.dp), ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))) {
+                    Surface(color = MaterialTheme.colorScheme.inverseSurface, shape = RoundedCornerShape(12.dp), tonalElevation = 8.dp, modifier = Modifier.fillMaxWidth().shadow(elevation = 32.dp, shape = RoundedCornerShape(12.dp), ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.4f))) {
                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
+                            Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.inversePrimary, RoundedCornerShape(2.dp)))
                             Spacer(modifier = Modifier.width(8.dp))
                             if (replyingTo.imageUri != null) {
                                 AsyncImage(
                                     model = replyingTo.imageUri, 
                                     contentDescription = null, 
-                                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray),
                                     contentScale = ContentScale.Crop
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Replying to", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Text(text = replyingTo.text ?: "Photo", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("Replying to", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.inversePrimary)
+                                Text(text = replyingTo.text ?: "Photo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            IconButton(onClick = onReplyDismiss) { Icon(Icons.Default.Close, "Cancel", modifier = Modifier.size(16.dp)) }
+                            IconButton(onClick = onReplyDismiss) { Icon(Icons.Default.Close, "Cancel", tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.size(16.dp)) }
                         }
                     }
                 }
