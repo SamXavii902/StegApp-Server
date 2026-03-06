@@ -956,7 +956,7 @@ fun MessageBubble(
                     .widthIn(max = 320.dp)
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
+                        indication = null as androidx.compose.foundation.IndicationNodeFactory?,
                         onClick = onClick,
                         onLongClick = onLongClick
                     )
@@ -1119,7 +1119,7 @@ fun Modifier.bounceClick(
         }
         .clickable(
             interactionSource = remember { MutableInteractionSource() },
-            indication = null,
+            indication = null as androidx.compose.foundation.IndicationNodeFactory?,
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
