@@ -719,13 +719,17 @@ fun ChatScreenContent(
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    // Match the input area color exactly and ensure shadow renders
+                    // Fix for dark mode shadow – use a strong ambient color tint that flips in dark mode
+                    val shadowColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.5f)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest, 
                         shape = RoundedCornerShape(12.dp), 
-                        shadowElevation = 16.dp, 
-                        tonalElevation = 8.dp, 
-                        modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false)
+                        modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false).shadow(
+                            elevation = 24.dp, 
+                            shape = RoundedCornerShape(12.dp), 
+                            ambientColor = shadowColor, 
+                            spotColor = shadowColor
+                        )
                     ) {
                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
@@ -967,39 +971,51 @@ fun MessageBubble(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     
-    // 🍏 Custom iOS-style Chat Bubble Shape with a swooping tail
-    val tailWidthDp = 6.dp
+    // 🍏 Authentic iOS-style Chat Bubble Shape with a swooping tail
+    val tailWidthDp = 5.dp
     val density = LocalDensity.current
     val bubbleShape = remember(isMe, density) {
         object : androidx.compose.ui.graphics.Shape {
             override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
-                val r = with(density) { 20.dp.toPx() }     // Bubble corner radius
-                val tOffset = with(density) { tailWidthDp.toPx() } // Tail width sticking out
+                val r = with(density) { 18.dp.toPx() } // Main corner radius 
+                val rSmall = with(density) { 4.dp.toPx() } // Corner radius near the tail
+                val tOffset = with(density) { tailWidthDp.toPx() } 
+                val w = size.width
+                val h = size.height
                 val path = androidx.compose.ui.graphics.Path()
-                
+
                 if (isMe) {
-                    // Main bubble rect, offset inwards on the right by tail width
-                    path.addRoundRect(androidx.compose.ui.geometry.RoundRect(
-                        0f, 0f, size.width - tOffset, size.height, 
-                        androidx.compose.ui.geometry.CornerRadius(r, r)
-                    ))
-                    // Draw tail on bottom right
-                    path.moveTo(size.width - tOffset - r, size.height)
-                    path.quadraticBezierTo(size.width - tOffset, size.height, size.width, size.height)
-                    path.quadraticBezierTo(size.width - tOffset/2f, size.height - r/4f, size.width - tOffset, size.height - r)
-                    path.lineTo(size.width - tOffset, size.height)
+                    val rightBound = w - tOffset
+                    // Top Left
+                    path.moveTo(0f, r)
+                    path.quadraticBezierTo(0f, 0f, r, 0f)
+                    // Top Right
+                    path.lineTo(rightBound - r, 0f)
+                    path.quadraticBezierTo(rightBound, 0f, rightBound, r)
+                    // Bottom Right (The Tail)
+                    path.lineTo(rightBound, h - rSmall)
+                    path.quadraticBezierTo(rightBound, h, rightBound + tOffset, h) // Swoop out
+                    path.quadraticBezierTo(rightBound, h, rightBound - rSmall, h) // Curve back in
+                    // Bottom Left
+                    path.lineTo(r, h)
+                    path.quadraticBezierTo(0f, h, 0f, h - r)
                     path.close()
                 } else {
-                    // Main bubble rect, offset inwards on the left by tail width
-                    path.addRoundRect(androidx.compose.ui.geometry.RoundRect(
-                        tOffset, 0f, size.width, size.height, 
-                        androidx.compose.ui.geometry.CornerRadius(r, r)
-                    ))
-                    // Draw tail on bottom left
-                    path.moveTo(tOffset + r, size.height)
-                    path.quadraticBezierTo(tOffset, size.height, 0f, size.height)
-                    path.quadraticBezierTo(tOffset/2f, size.height - r/4f, tOffset, size.height - r)
-                    path.lineTo(tOffset, size.height)
+                    val leftBound = tOffset
+                    // Top Left
+                    path.moveTo(leftBound + r, 0f)
+                    // Top Right
+                    path.lineTo(w - r, 0f)
+                    path.quadraticBezierTo(w, 0f, w, r)
+                    // Bottom Right
+                    path.lineTo(w, h - r)
+                    path.quadraticBezierTo(w, h, w - r, h)
+                    // Bottom Left (The Tail)
+                    path.lineTo(leftBound + rSmall, h)
+                    path.quadraticBezierTo(leftBound, h, leftBound - tOffset, h) // Swoop out
+                    path.quadraticBezierTo(leftBound, h, leftBound, h - rSmall) // Curve back in
+                    path.lineTo(leftBound, r)
+                    path.quadraticBezierTo(leftBound, 0f, leftBound + r, 0f)
                     path.close()
                 }
                 return androidx.compose.ui.graphics.Outline.Generic(path)
