@@ -629,7 +629,7 @@ fun ChatScreenContent(
             ) {
                 items(messages.reversed(), key = { it.id }) { message -> 
                     val isSelected = selectedMessages.contains(message)
-                    Box(modifier = Modifier.animateItemPlacement().bubbleEnterAnimation()) {
+                    Box(modifier = Modifier.animateItem().bubbleEnterAnimation()) {
                         MessageBubble(
                             message = message, 
                             allMessages = messages, 
@@ -726,6 +726,7 @@ fun ChatScreenContent(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().padding(4.dp).graphicsLayer(clip = false).onSizeChanged { inputHeightPx = it.height }) {
+                    val inputTint = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
                         shape = RoundedCornerShape(28.dp),
@@ -733,7 +734,7 @@ fun ChatScreenContent(
                             .hazeEffect(state = hazeState) {
                                 blurRadius = 25.dp
                                 noiseFactor = 0.1f
-                                tints = listOf(HazeTint(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)))
+                                tints = listOf(HazeTint(inputTint))
                             }
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
@@ -756,6 +757,7 @@ fun ChatScreenContent(
                             }
                         }
                     }
+                    val sendTint = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
                     Surface(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f),
@@ -764,7 +766,7 @@ fun ChatScreenContent(
                             .hazeEffect(state = hazeState) {
                                 blurRadius = 25.dp
                                 noiseFactor = 0.1f
-                                tints = listOf(HazeTint(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)))
+                                tints = listOf(HazeTint(sendTint))
                             }
                     ) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = { if(textInput.isNotBlank() || selectedImageUri != null) onSend() }), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.sendicon), contentDescription = "Send", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(26.dp)) }
@@ -792,6 +794,7 @@ fun ChatScreenContent(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val addTint = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
                     Surface(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
@@ -800,17 +803,18 @@ fun ChatScreenContent(
                             .hazeEffect(state = hazeState) {
                                 blurRadius = 25.dp
                                 noiseFactor = 0.1f
-                                tints = listOf(HazeTint(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)))
+                                tints = listOf(HazeTint(addTint))
                             }
                     ) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
                     }
+                    val navTint = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)
                     Surface(
                         modifier = Modifier.weight(1f).height(56.dp)
                             .hazeEffect(state = hazeState) {
                                 blurRadius = 25.dp
                                 noiseFactor = 0.1f
-                                tints = listOf(HazeTint(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)))
+                                tints = listOf(HazeTint(navTint))
                             },
                         shape = RoundedCornerShape(32.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)
