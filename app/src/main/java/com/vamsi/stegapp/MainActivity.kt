@@ -708,11 +708,27 @@ fun ChatScreenContent(
                     .height(scrimTotalHeight)
                     .background(
                         Brush.verticalGradient(
-                            0.0f to scrimColor.copy(alpha = 0f),
-                            0.4f to scrimColor.copy(alpha = 0.15f),
-                            0.7f to scrimColor.copy(alpha = 0.7f),
+                            // 20-stop ease-in curve for ultra-smooth fade
+                            0.00f to scrimColor.copy(alpha = 0f),
+                            0.05f to scrimColor.copy(alpha = 0.003f),
+                            0.10f to scrimColor.copy(alpha = 0.01f),
+                            0.15f to scrimColor.copy(alpha = 0.02f),
+                            0.20f to scrimColor.copy(alpha = 0.04f),
+                            0.25f to scrimColor.copy(alpha = 0.06f),
+                            0.30f to scrimColor.copy(alpha = 0.10f),
+                            0.35f to scrimColor.copy(alpha = 0.15f),
+                            0.40f to scrimColor.copy(alpha = 0.22f),
+                            0.45f to scrimColor.copy(alpha = 0.30f),
+                            0.50f to scrimColor.copy(alpha = 0.40f),
+                            0.55f to scrimColor.copy(alpha = 0.50f),
+                            0.60f to scrimColor.copy(alpha = 0.60f),
+                            0.65f to scrimColor.copy(alpha = 0.70f),
+                            0.70f to scrimColor.copy(alpha = 0.78f),
+                            0.75f to scrimColor.copy(alpha = 0.85f),
+                            0.80f to scrimColor.copy(alpha = 0.91f),
                             0.85f to scrimColor.copy(alpha = 0.95f),
-                            1.0f to scrimColor
+                            0.90f to scrimColor.copy(alpha = 0.98f),
+                            1.00f to scrimColor
                         )
                     )
                     .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
