@@ -1151,3 +1151,4 @@ fun Modifier.bubbleEnterAnimation(): Modifier = composed {
     }
     this.graphicsLayer(scaleX = scale.value, scaleY = scale.value, alpha = alpha.value)
 }
+}
