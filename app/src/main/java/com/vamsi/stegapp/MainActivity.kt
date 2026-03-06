@@ -772,6 +772,25 @@ fun ChatScreenContent(
             // will now gracefully float *through* the glowing aura at the bottom of the screen.
             val bgColor = MaterialTheme.colorScheme.background
             val auraColor = MaterialTheme.colorScheme.primary
+            val baseGradient = remember(bgColor) {
+                Brush.verticalGradient(
+                    colorStops = (0..49).map { i ->
+                        val t = i / 49f
+                        val alpha = (t * t * t).coerceIn(0f, 1f) * 1.0f // Reaches full opacity
+                        t to bgColor.copy(alpha = alpha)
+                    }.toTypedArray()
+                )
+            }
+            
+            val auraGradient = remember(auraColor) {
+                Brush.verticalGradient(
+                    colorStops = (0..49).map { i ->
+                        val t = i / 49f
+                        val alpha = (t * t * t).coerceIn(0f, 1f) * 0.20f // 20% max glow intensity
+                        t to auraColor.copy(alpha = alpha)
+                    }.toTypedArray()
+                )
+            }
             
             val inputDp = with(LocalDensity.current) { inputHeightPx.toDp() }
             // plus a dynamic gradient fade-out zone above
@@ -783,25 +802,9 @@ fun ChatScreenContent(
                     .fillMaxWidth()
                     .height(scrimTotalHeight)
                     // 1. Base fade: Fades up to solid background color at the very bottom to eliminate transparency
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = (0..49).map { i ->
-                                val t = i / 49f
-                                val alpha = (t * t * t).coerceIn(0f, 1f) * 1.0f // Reaches full opacity
-                                t to bgColor.copy(alpha = alpha)
-                            }.toTypedArray()
-                        )
-                    )
+                    .background(baseGradient)
                     // 2. The Aura: A glowing primary color gradient cast upwards from the bottom
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = (0..49).map { i ->
-                                val t = i / 49f
-                                val alpha = (t * t * t).coerceIn(0f, 1f) * 0.20f // 20% max glow intensity
-                                t to auraColor.copy(alpha = alpha)
-                            }.toTypedArray()
-                        )
-                    )
+                    .background(auraGradient)
                     .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
             )
 
