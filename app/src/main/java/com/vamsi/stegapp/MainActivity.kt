@@ -695,8 +695,12 @@ fun ChatScreenContent(
             
             LaunchedEffect(replyingTo) { if (replyingTo != null) { kotlinx.coroutines.delay(100); focusRequester.requestFocus() } }
             
-            // 🌫️ Responsive Gradient Scrim – tracks bottom bar state
-            val scrimColor = MaterialTheme.colorScheme.background
+            // 🌟 Dynamic Aura Scrim
+            // Replaces the solid fade with a translucent colored glow. Chat bubbles
+            // will now gracefully float *through* the glowing aura at the bottom of the screen.
+            val bgColor = MaterialTheme.colorScheme.background
+            val auraColor = MaterialTheme.colorScheme.primary
+            
             val inputDp = with(LocalDensity.current) { inputHeightPx.toDp() }
             // plus a dynamic gradient fade-out zone above
             val animatedFadeZone by animateDpAsState(targetValue = if (showBottomBar) 100.dp else 40.dp, label = "fade_zone")
@@ -706,13 +710,23 @@ fun ChatScreenContent(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(scrimTotalHeight)
+                    // 1. Base fade: Doesn't go fully opaque (max 85% alpha), letting bubbles peek through
                     .background(
                         Brush.verticalGradient(
                             colorStops = (0..49).map { i ->
                                 val t = i / 49f
-                                // Cubic ease-in curve: slow start, fast finish
-                                val alpha = (t * t * t).coerceIn(0f, 1f)
-                                t to scrimColor.copy(alpha = alpha)
+                                val alpha = (t * t * t).coerceIn(0f, 1f) * 0.85f
+                                t to bgColor.copy(alpha = alpha)
+                            }.toTypedArray()
+                        )
+                    )
+                    // 2. The Aura: A glowing primary color gradient cast upwards from the bottom
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = (0..49).map { i ->
+                                val t = i / 49f
+                                val alpha = (t * t * t).coerceIn(0f, 1f) * 0.20f // 20% max glow intensity
+                                t to auraColor.copy(alpha = alpha)
                             }.toTypedArray()
                         )
                     )
