@@ -695,21 +695,23 @@ fun ChatScreenContent(
             
             LaunchedEffect(replyingTo) { if (replyingTo != null) { kotlinx.coroutines.delay(100); focusRequester.requestFocus() } }
             
-            // 🌫️ Refined Gradient Scrim for better visual appeal
+            // 🌫️ Responsive Gradient Scrim – tracks bottom bar state
             val scrimColor = MaterialTheme.colorScheme.background
-            val scrimHeight = with(LocalDensity.current) { inputHeightPx.toDp() + 110.dp } // Fixed total height to cover input + bottom bar area
+            val inputDp = with(LocalDensity.current) { inputHeightPx.toDp() }
+            // Total solid area the scrim must cover (input + padding below it)
+            // plus a 40dp gradient fade-out zone above
+            val scrimTotalHeight = inputDp + animatedBottomPadding + 40.dp
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(scrimHeight)
-                    .offset(y = bottomBarMove) // Translate down when bottom bar hides
+                    .height(scrimTotalHeight)
                     .background(
                         Brush.verticalGradient(
                             0.0f to scrimColor.copy(alpha = 0f),
-                            0.3f to scrimColor.copy(alpha = 0.2f),
-                            0.6f to scrimColor.copy(alpha = 0.6f),
-                            0.8f to scrimColor.copy(alpha = 0.9f),
+                            0.4f to scrimColor.copy(alpha = 0.15f),
+                            0.7f to scrimColor.copy(alpha = 0.7f),
+                            0.85f to scrimColor.copy(alpha = 0.95f),
                             1.0f to scrimColor
                         )
                     )
