@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.vamsi.stegapp"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.vamsi.stegapp"
