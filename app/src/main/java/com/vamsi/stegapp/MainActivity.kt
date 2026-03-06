@@ -708,27 +708,12 @@ fun ChatScreenContent(
                     .height(scrimTotalHeight)
                     .background(
                         Brush.verticalGradient(
-                            // 20-stop ease-in curve for ultra-smooth fade
-                            0.00f to scrimColor.copy(alpha = 0f),
-                            0.05f to scrimColor.copy(alpha = 0.003f),
-                            0.10f to scrimColor.copy(alpha = 0.01f),
-                            0.15f to scrimColor.copy(alpha = 0.02f),
-                            0.20f to scrimColor.copy(alpha = 0.04f),
-                            0.25f to scrimColor.copy(alpha = 0.06f),
-                            0.30f to scrimColor.copy(alpha = 0.10f),
-                            0.35f to scrimColor.copy(alpha = 0.15f),
-                            0.40f to scrimColor.copy(alpha = 0.22f),
-                            0.45f to scrimColor.copy(alpha = 0.30f),
-                            0.50f to scrimColor.copy(alpha = 0.40f),
-                            0.55f to scrimColor.copy(alpha = 0.50f),
-                            0.60f to scrimColor.copy(alpha = 0.60f),
-                            0.65f to scrimColor.copy(alpha = 0.70f),
-                            0.70f to scrimColor.copy(alpha = 0.78f),
-                            0.75f to scrimColor.copy(alpha = 0.85f),
-                            0.80f to scrimColor.copy(alpha = 0.91f),
-                            0.85f to scrimColor.copy(alpha = 0.95f),
-                            0.90f to scrimColor.copy(alpha = 0.98f),
-                            1.00f to scrimColor
+                            colorStops = (0..49).map { i ->
+                                val t = i / 49f
+                                // Cubic ease-in curve: slow start, fast finish
+                                val alpha = (t * t * t).coerceIn(0f, 1f)
+                                t to scrimColor.copy(alpha = alpha)
+                            }.toTypedArray()
                         )
                     )
                     .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
@@ -778,7 +763,7 @@ fun ChatScreenContent(
                             }
                         }
                     }
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(56.dp)) {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(56.dp).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = { if(textInput.isNotBlank() || selectedImageUri != null) onSend() }), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.sendicon), contentDescription = "Send", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(26.dp)) }
                     }
                 }
@@ -804,7 +789,7 @@ fun ChatScreenContent(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(56.dp)) {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(56.dp).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
                     }
                     Surface(modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -820,7 +805,8 @@ fun ChatScreenContent(
                             }
                         }
                     }
-                    Surface(shape = CircleShape, color = if (isStealthMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer, shadowElevation = if (isStealthMode) 8.dp else 0.dp, modifier = Modifier.size(56.dp)) {
+                    val envelopeGlowElevation by animateDpAsState(targetValue = if (isStealthMode) 16.dp else 0.dp, label = "envelope_glow")
+                    Surface(shape = CircleShape, color = if (isStealthMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer, shadowElevation = if (isStealthMode) 8.dp else 0.dp, modifier = Modifier.size(56.dp).shadow(elevation = envelopeGlowElevation, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.7f else 0f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.6f else 0f))) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick { onStealthModeChange(!isStealthMode) }, contentAlignment = Alignment.Center) { 
                             Crossfade(targetState = isStealthMode, label = "stealth_icon") { isEnabled ->
                                 Icon(
