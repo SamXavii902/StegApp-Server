@@ -69,6 +69,10 @@ class ContactViewModel(private val context: Context) : ViewModel() {
 
 
     fun addContact(name: String) {
+        if (uiState.value.contacts.any { it.name.equals(name, ignoreCase = true) }) {
+            android.widget.Toast.makeText(context, "Contact '$name' already exists!", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         viewModelScope.launch {
             try {
                 // Verify user exists on backend

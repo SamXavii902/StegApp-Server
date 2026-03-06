@@ -543,8 +543,26 @@ fun ChatScreenContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(40.dp).bounceClick(onClick = onBack), contentAlignment = Alignment.Center) { Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(40.dp)) {
-                            Box(contentAlignment = Alignment.Center) { Text(chatName.take(1), color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+                        val maxIndex = maxOf(1, messages.size - 1)
+                        val chatProgress by remember(messages.size) {
+                            derivedStateOf {
+                                if (messages.size <= 1) 1f
+                                else 1f - (listState.firstVisibleItemIndex.toFloat() / maxIndex).coerceIn(0f, 1f)
+                            }
+                        }
+
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+                            CircularProgressIndicator(
+                                progress = { chatProgress },
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = Color.Transparent,
+                                strokeWidth = 2.dp,
+                                strokeCap = StrokeCap.Round
+                            )
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(40.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Text(chatName.take(1), color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+                            }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
@@ -596,9 +614,18 @@ fun ChatScreenContent(
                }
             }
 
-            // Auto-Scroll to Bottom on Send
+            // General Scroll Haptics: Light tick when passing items
+            var lastIndexForHaptic by remember { mutableIntStateOf(listState.firstVisibleItemIndex) }
+            LaunchedEffect(listState.firstVisibleItemIndex, isScrolling) {
+                if (isScrolling && listState.firstVisibleItemIndex != lastIndexForHaptic) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) // extremely subtle tick
+                    lastIndexForHaptic = listState.firstVisibleItemIndex
+                }
+            }
+
+            // Auto-Scroll up when a new chat bubble appears
             LaunchedEffect(messages.size) {
-                 if (messages.isNotEmpty() && messages.last().isFromMe) {
+                 if (messages.isNotEmpty()) {
                      listState.animateScrollToItem(0)
                  }
             }
@@ -670,7 +697,7 @@ fun ChatScreenContent(
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(12.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(12.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth().shadow(elevation = 16.dp, shape = RoundedCornerShape(12.dp), ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))) {
                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
                             Spacer(modifier = Modifier.width(8.dp))
