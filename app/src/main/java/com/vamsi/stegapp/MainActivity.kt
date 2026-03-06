@@ -812,8 +812,8 @@ fun ChatScreenContent(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().padding(4.dp).graphicsLayer(clip = false).onSizeChanged { inputHeightPx = it.height }) {
-                    // Changing input area to surfaceContainerHighest for better contrast against received bubbles (surfaceVariant)
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()) {
+                    // Changing input area to surfaceContainer exactly match the slider bg
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                             if (selectedImageUri != null) {
                                 Box(modifier = Modifier.padding(end = 8.dp)) {
@@ -966,6 +966,46 @@ fun MessageBubble(
     val swipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
+    
+    // 🍏 Custom iOS-style Chat Bubble Shape with a swooping tail
+    val tailWidthDp = 6.dp
+    val density = LocalDensity.current
+    val bubbleShape = remember(isMe, density) {
+        object : androidx.compose.ui.graphics.Shape {
+            override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
+                val r = with(density) { 20.dp.toPx() }     // Bubble corner radius
+                val tOffset = with(density) { tailWidthDp.toPx() } // Tail width sticking out
+                val path = androidx.compose.ui.graphics.Path()
+                
+                if (isMe) {
+                    // Main bubble rect, offset inwards on the right by tail width
+                    path.addRoundRect(androidx.compose.ui.geometry.RoundRect(
+                        0f, 0f, size.width - tOffset, size.height, 
+                        androidx.compose.ui.geometry.CornerRadius(r, r)
+                    ))
+                    // Draw tail on bottom right
+                    path.moveTo(size.width - tOffset - r, size.height)
+                    path.quadraticBezierTo(size.width - tOffset, size.height, size.width, size.height)
+                    path.quadraticBezierTo(size.width - tOffset/2f, size.height - r/4f, size.width - tOffset, size.height - r)
+                    path.lineTo(size.width - tOffset, size.height)
+                    path.close()
+                } else {
+                    // Main bubble rect, offset inwards on the left by tail width
+                    path.addRoundRect(androidx.compose.ui.geometry.RoundRect(
+                        tOffset, 0f, size.width, size.height, 
+                        androidx.compose.ui.geometry.CornerRadius(r, r)
+                    ))
+                    // Draw tail on bottom left
+                    path.moveTo(tOffset + r, size.height)
+                    path.quadraticBezierTo(tOffset, size.height, 0f, size.height)
+                    path.quadraticBezierTo(tOffset/2f, size.height - r/4f, tOffset, size.height - r)
+                    path.lineTo(tOffset, size.height)
+                    path.close()
+                }
+                return androidx.compose.ui.graphics.Outline.Generic(path)
+            }
+        }
+    }
         
     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).pointerInput(Unit) {
         detectHorizontalDragGestures(onDragEnd = { scope.launch { if (java.lang.Math.abs(swipeOffset.value) > 100f) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onReply(message) }; swipeOffset.animateTo(0f) } },
@@ -983,7 +1023,7 @@ fun MessageBubble(
             Surface(
                 color = bubbleColor, 
                 contentColor = contentColor, 
-                shape = if (isMe) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp), 
+                shape = bubbleShape, 
                 modifier = Modifier
                     .widthIn(max = 320.dp)
                     .combinedClickable(
@@ -993,7 +1033,12 @@ fun MessageBubble(
                         onLongClick = onLongClick
                     )
             ) {
-              Column(modifier = Modifier.padding(10.dp)) {
+              Column(modifier = Modifier.padding(
+                  top = 10.dp, 
+                  bottom = 10.dp, 
+                  start = if (isMe) 12.dp else 12.dp + tailWidthDp, 
+                  end = if (isMe) 12.dp + tailWidthDp else 12.dp
+              )) {
                  if (message.replyToId != null) {
                      val replied = allMessages.find { it.id == message.replyToId }
                      if (replied != null) {
