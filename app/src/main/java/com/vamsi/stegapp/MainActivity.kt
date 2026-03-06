@@ -714,24 +714,35 @@ fun ChatScreenContent(
                 visible = replyingTo != null,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 28.dp) // Aligned with Input Area + Send Button (24dp container + 4dp row padding)
-                    .padding(bottom = animatedBottomPadding + with(LocalDensity.current) { inputHeightPx.toDp() } + replyBannerMove + (if (selectedImageUri != null) replyBannerPillMove else 0.dp))
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    val shadowColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.5f)
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest, 
-                        shape = RoundedCornerShape(12.dp), 
-                        modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false).shadow(
-                            elevation = 24.dp, 
-                            shape = RoundedCornerShape(12.dp),
-                            clip = false,
-                            ambientColor = shadowColor, 
-                            spotColor = shadowColor
+                    val shadowColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.4f)
+                    // Move padding to this inner Box so the shadow inside has space to render into the padded margins!
+                    Box(modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp) // Aligned with Input Area + Send Button (24dp container + 4dp row padding)
+                        // Give 24dp top padding for shadow to bleed upwards 
+                        .padding(
+                            top = 24.dp, 
+                            bottom = animatedBottomPadding + with(LocalDensity.current) { inputHeightPx.toDp() } + replyBannerMove + (if (selectedImageUri != null) replyBannerPillMove else 0.dp)
                         )
                     ) {
-                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainer, // Exactly matches the text input box 
+                            shape = RoundedCornerShape(12.dp), 
+                            modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false).shadow(
+                                elevation = 24.dp, 
+                                shape = RoundedCornerShape(12.dp),
+                                clip = false,
+                                ambientColor = shadowColor, 
+                                spotColor = shadowColor
+                            )
+                        ) {
+                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
                             Spacer(modifier = Modifier.width(8.dp))
                             if (replyingTo.imageUri != null) {
