@@ -703,12 +703,13 @@ fun ChatScreenContent(
             
             // 🌫️ Backdrop blur handled per-element via Haze – no gradient scrim needed
 
+        Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            // Main Input Area
             AnimatedVisibility(
                 visible = currentMode == ChatMode.HIDE,
-                // Adjusted scale to 0.8f for more noticeable pop
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), initialScale = 0.8f) + fadeIn(animationSpec = tween(300)),
                 exit = scaleOut(animationSpec = tween(200), targetScale = 0.8f) + fadeOut(animationSpec = tween(200)),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = animatedBottomPadding).padding(horizontal = 24.dp).graphicsLayer(clip = false)
+                modifier = Modifier.padding(horizontal = 24.dp).graphicsLayer(clip = false)
             ) {
                 if (selectedImageUri != null) {
                     var maxCapacity by remember(selectedImageUri) { mutableStateOf(0) }
@@ -718,7 +719,7 @@ fun ChatScreenContent(
                         Surface(
                             color = if (remaining < 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = if (remaining < 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onTertiaryContainer,
-                            shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.BottomStart).offset(x = capacityPillXOffset, y = capacityPillMove).zIndex(1f)
+                            shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.Start).offset(x = capacityPillXOffset, y = capacityPillMove).zIndex(1f)
                         ) {
                             Text(text = "Capacity: ${if(remaining > 1000) "~${remaining/1000}k" else "$remaining"} left", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                         }
@@ -728,7 +729,7 @@ fun ChatScreenContent(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().padding(4.dp).graphicsLayer(clip = false).onSizeChanged { inputHeightPx = it.height }) {
                     val inputTint = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
+                        color = Color.Transparent,
                         shape = RoundedCornerShape(28.dp),
                         modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()
                             .hazeEffect(state = hazeState) {
@@ -757,10 +758,10 @@ fun ChatScreenContent(
                             }
                         }
                     }
-                    val sendTint = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+                    val sendTint = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.75f)
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f),
+                        color = Color.Transparent,
                         modifier = Modifier.size(56.dp)
                             .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
                             .hazeEffect(state = hazeState) {
@@ -779,25 +780,25 @@ fun ChatScreenContent(
                 // Adjusted scale to 0.8f for more noticeable pop
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessLow), initialScale = 0.8f) + fadeIn(), 
                 exit = scaleOut(targetScale = 0.8f) + fadeOut(), 
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = animatedBottomPadding).padding(horizontal = 24.dp)
+                modifier = Modifier.padding(horizontal = 24.dp)
             ) {
                 Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(24.dp), modifier = Modifier.padding(4.dp)) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Text("Select an image to reveal", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface) }
                 }
             }
-        }
 
-        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarMove, start = 24.dp, end = 24.dp)) {
+            // Bottom Nav Bar (Hide/Reveal)
+            Box(modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = bottomBarMove)) {
             androidx.compose.animation.AnimatedVisibility(
                 visible = showBottomBar,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    val addTint = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                    val addTint = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                        color = Color.Transparent,
                         modifier = Modifier.size(56.dp)
                             .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
                             .hazeEffect(state = hazeState) {
@@ -808,7 +809,7 @@ fun ChatScreenContent(
                     ) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
                     }
-                    val navTint = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)
+                    val navTint = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f)
                     Surface(
                         modifier = Modifier.weight(1f).height(56.dp)
                             .hazeEffect(state = hazeState) {
@@ -817,7 +818,7 @@ fun ChatScreenContent(
                                 tints = listOf(HazeTint(navTint))
                             },
                         shape = RoundedCornerShape(32.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)
+                        color = Color.Transparent
                     ) {
                         BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(4.dp)) {
                             val tabWidth = maxWidth / 2
@@ -832,11 +833,10 @@ fun ChatScreenContent(
                         }
                     }
                     val envelopeGlowElevation by animateDpAsState(targetValue = if (isStealthMode) 16.dp else 0.dp, label = "envelope_glow")
-                    val envelopeBgColor = if (isStealthMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)
-                    val envelopeTint = if (isStealthMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)
+                    val envelopeTint = if (isStealthMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f)
                     Surface(
                         shape = CircleShape,
-                        color = envelopeBgColor,
+                        color = Color.Transparent,
                         shadowElevation = if (isStealthMode) 8.dp else 0.dp,
                         modifier = Modifier.size(56.dp)
                             .shadow(elevation = envelopeGlowElevation, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.7f else 0f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.6f else 0f))
