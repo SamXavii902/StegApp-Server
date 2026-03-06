@@ -761,8 +761,9 @@ fun ChatScreenContent(
                             IconButton(onClick = onReplyDismiss) { Icon(Icons.Default.Close, "Cancel", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp)) }
                         }
                     }
-                }
-            }
+                } // Closes Box
+                } // Closes if (replyingTo != null)
+            } // Closes AnimatedVisibility
             
             LaunchedEffect(replyingTo) { if (replyingTo != null) { kotlinx.coroutines.delay(100); focusRequester.requestFocus() } }
             
