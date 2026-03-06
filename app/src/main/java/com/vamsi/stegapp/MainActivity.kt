@@ -544,7 +544,7 @@ fun ChatScreenContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(40.dp).bounceClick(onClick = onBack), contentAlignment = Alignment.Center) { Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        val chatProgress by remember(messages.size) {
+                        val rawChatProgress by remember(messages.size) {
                             derivedStateOf {
                                 if (messages.size <= 1) 1f
                                 else {
@@ -565,6 +565,13 @@ fun ChatScreenContent(
                                 }
                             }
                         }
+                        
+                        // Relaxed spring animation for the progress ring
+                        val chatProgress by animateFloatAsState(
+                            targetValue = rawChatProgress,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+                            label = "chat_progress_anim"
+                        )
 
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
                             CircularProgressIndicator(
@@ -712,9 +719,16 @@ fun ChatScreenContent(
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    Surface(color = MaterialTheme.colorScheme.inverseSurface, shape = RoundedCornerShape(12.dp), tonalElevation = 8.dp, modifier = Modifier.fillMaxWidth().shadow(elevation = 32.dp, shape = RoundedCornerShape(12.dp), ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.4f))) {
+                    // Match the input area color exactly and ensure shadow renders
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest, 
+                        shape = RoundedCornerShape(12.dp), 
+                        shadowElevation = 16.dp, 
+                        tonalElevation = 8.dp, 
+                        modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false)
+                    ) {
                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.inversePrimary, RoundedCornerShape(2.dp)))
+                            Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
                             Spacer(modifier = Modifier.width(8.dp))
                             if (replyingTo.imageUri != null) {
                                 AsyncImage(
@@ -726,10 +740,10 @@ fun ChatScreenContent(
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Replying to", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.inversePrimary)
-                                Text(text = replyingTo.text ?: "Photo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.inverseOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("Replying to", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Text(text = replyingTo.text ?: "Photo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            IconButton(onClick = onReplyDismiss) { Icon(Icons.Default.Close, "Cancel", tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.size(16.dp)) }
+                            IconButton(onClick = onReplyDismiss) { Icon(Icons.Default.Close, "Cancel", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp)) }
                         }
                     }
                 }
