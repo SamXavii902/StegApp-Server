@@ -719,14 +719,14 @@ fun ChatScreenContent(
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    // Fix for dark mode shadow – use a strong ambient color tint that flips in dark mode
                     val shadowColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.5f)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest, 
                         shape = RoundedCornerShape(12.dp), 
                         modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false).shadow(
                             elevation = 24.dp, 
-                            shape = RoundedCornerShape(12.dp), 
+                            shape = RoundedCornerShape(12.dp),
+                            clip = false,
                             ambientColor = shadowColor, 
                             spotColor = shadowColor
                         )
