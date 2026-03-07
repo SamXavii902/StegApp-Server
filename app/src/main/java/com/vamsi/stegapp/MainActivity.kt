@@ -73,7 +73,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Brush
 import com.skydoves.cloudy.cloudy
-import com.skydoves.cloudy.liquidGlass
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
@@ -829,7 +828,7 @@ fun ChatScreenContent(
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f), 
                         shape = RoundedCornerShape(28.dp), 
-                        modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight().cloudy(radius = 15).liquidGlass()
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight().cloudy(radius = 15)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                             if (selectedImageUri != null) {
@@ -851,7 +850,7 @@ fun ChatScreenContent(
                             }
                         }
                     }
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f), modifier = Modifier.size(56.dp).cloudy(radius = 10).liquidGlass().shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))) {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f), modifier = Modifier.size(56.dp).cloudy(radius = 10).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = { if(textInput.isNotBlank() || selectedImageUri != null) onSend() }), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.sendicon), contentDescription = "Send", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(26.dp)) }
                     }
                 }
@@ -877,10 +876,10 @@ fun ChatScreenContent(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), modifier = Modifier.size(56.dp).cloudy(radius = 10).liquidGlass().shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))) {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), modifier = Modifier.size(56.dp).cloudy(radius = 10).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))) {
                         Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
                     }
-                    Surface(modifier = Modifier.weight(1f).height(56.dp).cloudy(radius = 15).liquidGlass(), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)) {
+                    Surface(modifier = Modifier.weight(1f).height(56.dp).cloudy(radius = 15), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)) {
                         BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(4.dp)) {
                             val tabWidth = maxWidth / 2
                             val indicatorOffset by animateDpAsState(if (currentMode == ChatMode.HIDE) 0.dp else tabWidth, label = "indicator")
