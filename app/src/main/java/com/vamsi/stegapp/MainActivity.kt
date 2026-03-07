@@ -672,7 +672,10 @@ fun ChatScreenContent(
             ) {
                 items(messages.reversed(), key = { it.id }) { message -> 
                     val isSelected = selectedMessages.contains(message)
-                    Box(modifier = Modifier.animateItemPlacement().bubbleEnterAnimation()) {
+                    // Only apply the heavy enter animation to newly arriving messages, don't lag when scrolling past old history
+                    val isRecent = System.currentTimeMillis() - message.timestamp < 5000L 
+                    
+                    Box(modifier = Modifier.animateItemPlacement().then(if (isRecent) Modifier.bubbleEnterAnimation() else Modifier)) {
                         MessageBubble(
                             message = message, 
                             allMessages = messages, 
@@ -720,32 +723,27 @@ fun ChatScreenContent(
                     .zIndex(3f)
             ) {
                 if (replyingTo != null) {
-                    val glowColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.35f)
-                    // Move padding to this inner Box so the glow layer has space to render!
+                    val shadowColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.4f)
+                    // Move padding to this inner Box so the shadow inside has space to render into the padded margins!
                     Box(modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 28.dp)
+                        .padding(horizontal = 28.dp) // Aligned with Input Area + Send Button (24dp container + 4dp row padding)
+                        // Give 24dp top padding for shadow to bleed upwards 
                         .padding(
                             top = 24.dp, 
                             bottom = animatedBottomPadding + with(LocalDensity.current) { inputHeightPx.toDp() } + replyBannerMove + (if (selectedImageUri != null) replyBannerPillMove else 0.dp)
                         )
                     ) {
-                        // Radial gradient glow behind the banner
-                        Box(modifier = Modifier
-                            .matchParentSize()
-                            .offset(y = 6.dp)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(glowColor, Color.Transparent),
-                                    radius = 500f
-                                ),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        )
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            color = MaterialTheme.colorScheme.surfaceContainer, // Exactly matches the text input box 
                             shape = RoundedCornerShape(12.dp), 
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().graphicsLayer(clip = false).shadow(
+                                elevation = 24.dp, 
+                                shape = RoundedCornerShape(12.dp),
+                                clip = false,
+                                ambientColor = shadowColor, 
+                                spotColor = shadowColor
+                            )
                         ) {
                             Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.width(4.dp).height(36.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
@@ -772,9 +770,46 @@ fun ChatScreenContent(
             
             LaunchedEffect(replyingTo) { if (replyingTo != null) { kotlinx.coroutines.delay(100); focusRequester.requestFocus() } }
             
-            // 🌟 Individual Shadows Replaced Dynamic Aura Scrim
-            // Scrim removed for performance. Floating elements now have their own glowing drop shadows.
+            // 🌟 Dynamic Aura Scrim
+            // Replaces the solid fade with a translucent colored glow. Chat bubbles
+            // will now gracefully float *through* the glowing aura at the bottom of the screen.
+            val bgColor = MaterialTheme.colorScheme.background
+            val auraColor = MaterialTheme.colorScheme.primary
+            val baseGradient = remember(bgColor) {
+                Brush.verticalGradient(
+                    colorStops = (0..49).map { i ->
+                        val t = i / 49f
+                        val alpha = (t * t * t).coerceIn(0f, 1f) * 1.0f // Reaches full opacity
+                        t to bgColor.copy(alpha = alpha)
+                    }.toTypedArray()
+                )
+            }
+            
+            val auraGradient = remember(auraColor) {
+                Brush.verticalGradient(
+                    colorStops = (0..49).map { i ->
+                        val t = i / 49f
+                        val alpha = (t * t * t).coerceIn(0f, 1f) * 0.50f // 20% max glow intensity
+                        t to auraColor.copy(alpha = alpha)
+                    }.toTypedArray()
+                )
+            }
+            
             val inputDp = with(LocalDensity.current) { inputHeightPx.toDp() }
+            // plus a dynamic gradient fade-out zone above
+            val animatedFadeZone by animateDpAsState(targetValue = if (showBottomBar) 100.dp else 40.dp, label = "fade_zone")
+            val scrimTotalHeight = inputDp + animatedBottomPadding + animatedFadeZone
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(scrimTotalHeight)
+                    // 1. Base fade: Fades up to solid background color at the very bottom to eliminate transparency
+                    .background(baseGradient)
+                    // 2. The Aura: A glowing primary color gradient cast upwards from the bottom
+                    .background(auraGradient)
+                    .windowInsetsPadding(WindowInsets.ime) // Moves up with keyboard
+            )
 
             AnimatedVisibility(
                 visible = currentMode == ChatMode.HIDE,
@@ -799,66 +834,30 @@ fun ChatScreenContent(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().padding(4.dp).graphicsLayer(clip = false).onSizeChanged { inputHeightPx = it.height }) {
-                    // Text Input Area with dark glow behind it
-                    Box(modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()) {
-                        // Glow layer behind:
-                        Box(modifier = Modifier.matchParentSize().offset(y = 4.dp).background(
-                            Brush.radialGradient(
-                                colors = listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent),
-                                radius = 400f
-                            ),
-                            shape = RoundedCornerShape(28.dp)
-                        ))
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainer, 
-                            shape = RoundedCornerShape(28.dp), 
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                                if (selectedImageUri != null) {
-                                    Box(modifier = Modifier.padding(end = 8.dp)) {
-                                        AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.size(42.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-                                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.inverseSurface, modifier = Modifier.size(20.dp).align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).shadow(2.dp, CircleShape).clickable { onRemoveImage() }) {
-                                            Icon(imageVector = Icons.Default.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.padding(3.dp))
-                                        }
-                                    }
-                                }
-                                androidx.compose.foundation.text.BasicTextField(
-                                    value = textInput, onValueChange = onTextInputChange, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                                    singleLine = false, maxLines = 5,
-                                    decorationBox = { inner -> Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { if (textInput.isEmpty()) Text("Message $chatName...", color = Color.Gray); inner() } },
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp).focusRequester(focusRequester)
-                                )
-                                // Camera button with colored glow
-                                val cameraGlowColor = MaterialTheme.colorScheme.primaryContainer
-                                Box(contentAlignment = Alignment.Center) {
-                                    // Glow layer
-                                    Box(modifier = Modifier.size(64.dp).background(
-                                        Brush.radialGradient(
-                                            colors = listOf(cameraGlowColor.copy(alpha = 0.7f), Color.Transparent),
-                                            radius = 100f
-                                        )
-                                    ))
-                                    Surface(shape = CircleShape, color = cameraGlowColor, modifier = Modifier.size(40.dp)) {
-                                        Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onCameraClick), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.camera), contentDescription = "Camera", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp)) }
+                    // Changing input area to surfaceContainer exactly match the slider bg
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f).heightIn(min = 56.dp).wrapContentHeight()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                            if (selectedImageUri != null) {
+                                Box(modifier = Modifier.padding(end = 8.dp)) {
+                                    AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.size(42.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.inverseSurface, modifier = Modifier.size(20.dp).align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).shadow(2.dp, CircleShape).clickable { onRemoveImage() }) {
+                                        Icon(imageVector = Icons.Default.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.padding(3.dp))
                                     }
                                 }
                             }
+                            androidx.compose.foundation.text.BasicTextField(
+                                value = textInput, onValueChange = onTextInputChange, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                                singleLine = false, maxLines = 5,
+                                decorationBox = { inner -> Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { if (textInput.isEmpty()) Text("Message $chatName...", color = Color.Gray); inner() } },
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp).focusRequester(focusRequester)
+                            )
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
+                                Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onCameraClick), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.camera), contentDescription = "Camera", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp)) }
+                            }
                         }
                     }
-                    // Send button with aggressive colored glow
-                    val sendGlowColor = MaterialTheme.colorScheme.tertiaryContainer
-                    Box(contentAlignment = Alignment.Center) {
-                        // Aggressive glow layer
-                        Box(modifier = Modifier.size(96.dp).background(
-                            Brush.radialGradient(
-                                colors = listOf(sendGlowColor.copy(alpha = 0.8f), sendGlowColor.copy(alpha = 0.3f), Color.Transparent),
-                                radius = 150f
-                            )
-                        ))
-                        Surface(shape = CircleShape, color = sendGlowColor, modifier = Modifier.size(56.dp)) {
-                            Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = { if(textInput.isNotBlank() || selectedImageUri != null) onSend() }), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.sendicon), contentDescription = "Send", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(26.dp)) }
-                        }
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(56.dp).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))) {
+                        Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = { if(textInput.isNotBlank() || selectedImageUri != null) onSend() }), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.sendicon), contentDescription = "Send", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(26.dp)) }
                     }
                 }
             }
@@ -883,66 +882,32 @@ fun ChatScreenContent(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Gallery/Add Image button with aggressive colored glow
-                    val addImageGlow = MaterialTheme.colorScheme.primaryContainer
-                    Box(contentAlignment = Alignment.Center) {
-                        // Glow layer
-                        Box(modifier = Modifier.size(96.dp).background(
-                            Brush.radialGradient(
-                                colors = listOf(addImageGlow.copy(alpha = 0.8f), addImageGlow.copy(alpha = 0.3f), Color.Transparent),
-                                radius = 150f
-                            )
-                        ))
-                        Surface(shape = CircleShape, color = addImageGlow, modifier = Modifier.size(56.dp)) {
-                            Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
-                        }
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(56.dp).shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), spotColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))) {
+                        Box(modifier = Modifier.fillMaxSize().bounceClick(onClick = onPickImage), contentAlignment = Alignment.Center) { Icon(painter = painterResource(R.drawable.addimage), contentDescription = "Add", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp).offset(x = 1.dp, y = 1.dp)) }
                     }
-                    // Hide/Reveal slider with dark shadow glow
-                    Box(modifier = Modifier.weight(1f).height(56.dp)) {
-                        // Dark glow behind
-                        Box(modifier = Modifier.matchParentSize().offset(y = 4.dp).background(
-                            Brush.radialGradient(
-                                colors = listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent),
-                                radius = 400f
-                            ),
-                            shape = RoundedCornerShape(32.dp)
-                        ))
-                        Surface(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-                            BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(4.dp)) {
-                                val tabWidth = maxWidth / 2
-                                val indicatorOffset by animateDpAsState(if (currentMode == ChatMode.HIDE) 0.dp else tabWidth, label = "indicator")
-                                val hideTextColor by animateColorAsState(if (currentMode == ChatMode.HIDE) (if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black) else MaterialTheme.colorScheme.onSurfaceVariant, label = "hide_text")
-                                val revealTextColor by animateColorAsState(if (currentMode == ChatMode.EXTRACT) (if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black) else MaterialTheme.colorScheme.onSurfaceVariant, label = "reveal_text")
-                                Box(modifier = Modifier.width(tabWidth).fillMaxHeight().offset(x = indicatorOffset).clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.primaryContainer))
-                                Row(modifier = Modifier.fillMaxSize()) {
-                                    Box(modifier = Modifier.weight(1f).fillMaxHeight().bounceClick { onModeChange(ChatMode.HIDE) }, contentAlignment = Alignment.Center) { Text("Hide", fontWeight = FontWeight.SemiBold, color = hideTextColor) }
-                                    Box(modifier = Modifier.weight(1f).fillMaxHeight().bounceClick { onModeChange(ChatMode.EXTRACT) }, contentAlignment = Alignment.Center) { Text("Reveal", fontWeight = FontWeight.SemiBold, color = revealTextColor) }
-                                }
+                    Surface(modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+                            val tabWidth = maxWidth / 2
+                            val indicatorOffset by animateDpAsState(if (currentMode == ChatMode.HIDE) 0.dp else tabWidth, label = "indicator")
+                            val hideTextColor by animateColorAsState(if (currentMode == ChatMode.HIDE) (if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black) else MaterialTheme.colorScheme.onSurfaceVariant, label = "hide_text")
+                            val revealTextColor by animateColorAsState(if (currentMode == ChatMode.EXTRACT) (if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black) else MaterialTheme.colorScheme.onSurfaceVariant, label = "reveal_text")
+                            Box(modifier = Modifier.width(tabWidth).fillMaxHeight().offset(x = indicatorOffset).clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.primaryContainer))
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight().bounceClick { onModeChange(ChatMode.HIDE) }, contentAlignment = Alignment.Center) { Text("Hide", fontWeight = FontWeight.SemiBold, color = hideTextColor) }
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight().bounceClick { onModeChange(ChatMode.EXTRACT) }, contentAlignment = Alignment.Center) { Text("Reveal", fontWeight = FontWeight.SemiBold, color = revealTextColor) }
                             }
                         }
                     }
-                    // Envelope button with aggressive colored glow
-                    val envelopeColor = if (isStealthMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer
-                    val envelopeGlowColor = if (isStealthMode) MaterialTheme.colorScheme.primary else Color.Black
-                    val envelopeGlowAlpha = if (isStealthMode) 0.9f else 0.4f
-                    Box(contentAlignment = Alignment.Center) {
-                        // Glow layer
-                        Box(modifier = Modifier.size(if (isStealthMode) 96.dp else 80.dp).background(
-                            Brush.radialGradient(
-                                colors = listOf(envelopeGlowColor.copy(alpha = envelopeGlowAlpha), envelopeGlowColor.copy(alpha = envelopeGlowAlpha * 0.3f), Color.Transparent),
-                                radius = if (isStealthMode) 150f else 120f
-                            )
-                        ))
-                        Surface(shape = CircleShape, color = envelopeColor, modifier = Modifier.size(56.dp)) {
-                            Box(modifier = Modifier.fillMaxSize().bounceClick { onStealthModeChange(!isStealthMode) }, contentAlignment = Alignment.Center) { 
-                                Crossfade(targetState = isStealthMode, label = "stealth_icon") { isEnabled ->
-                                    Icon(
-                                        painter = painterResource(if (isEnabled) R.drawable.f7_envelope_closed else R.drawable.envelope_open_fill), 
-                                        contentDescription = "Stealth", 
-                                        tint = if (isEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                        modifier = if (isEnabled) Modifier.size(22.dp).offset(y = 0.5.dp) else Modifier.size(21.dp)
-                                    ) 
-                                }
+                    val envelopeGlowElevation by animateDpAsState(targetValue = if (isStealthMode) 16.dp else 0.dp, label = "envelope_glow")
+                    Surface(shape = CircleShape, color = if (isStealthMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer, shadowElevation = if (isStealthMode) 8.dp else 0.dp, modifier = Modifier.size(56.dp).shadow(elevation = envelopeGlowElevation, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.7f else 0f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isStealthMode) 0.6f else 0f))) {
+                        Box(modifier = Modifier.fillMaxSize().bounceClick { onStealthModeChange(!isStealthMode) }, contentAlignment = Alignment.Center) { 
+                            Crossfade(targetState = isStealthMode, label = "stealth_icon") { isEnabled ->
+                                Icon(
+                                    painter = painterResource(if (isEnabled) R.drawable.f7_envelope_closed else R.drawable.envelope_open_fill), 
+                                    contentDescription = "Stealth", 
+                                    tint = if (isEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = if (isEnabled) Modifier.size(22.dp).offset(y = 0.5.dp) else Modifier.size(21.dp)
+                                ) 
                             }
                         }
                     }
@@ -1015,9 +980,12 @@ fun MessageBubble(
     val baseColor = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
     val highlightColor = MaterialTheme.colorScheme.tertiary // Distinct bold color for highlight
 
-    val bubbleColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) 
-                      else highlightColor.copy(alpha = highlightAlpha.value).compositeOver(baseColor)
-                      
+    val bubbleColor = remember(isSelected, highlightAlpha.value, baseColor, highlightColor) {
+        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+        else if (highlightAlpha.value == 0f) baseColor 
+        else highlightColor.copy(alpha = highlightAlpha.value).compositeOver(baseColor)
+    }
+
     val showText = message.text != null
     
     val swipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }

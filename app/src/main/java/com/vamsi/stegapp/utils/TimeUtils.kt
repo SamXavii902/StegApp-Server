@@ -5,13 +5,19 @@ import java.util.Date
 import java.util.Locale
 
 object TimeUtils {
+    private val timeFormatter = object : ThreadLocal<SimpleDateFormat>() {
+        override fun initialValue(): SimpleDateFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+    }
+
+    private val dateTimeFormatter = object : ThreadLocal<SimpleDateFormat>() {
+        override fun initialValue(): SimpleDateFormat = SimpleDateFormat("dd MMM • h:mm a", Locale.getDefault())
+    }
+
     fun formatTime(timestamp: Long): String {
-        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-        return sdf.format(Date(timestamp))
+        return timeFormatter.get()?.format(Date(timestamp)) ?: ""
     }
 
     fun formatDateTime(timestamp: Long): String {
-        val sdf = SimpleDateFormat("dd MMM • h:mm a", Locale.getDefault())
-        return sdf.format(Date(timestamp))
+        return dateTimeFormatter.get()?.format(Date(timestamp)) ?: ""
     }
 }
